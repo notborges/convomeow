@@ -1,0 +1,35 @@
+# Runtime data and local plans
+/data/
+/planning/
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.log
+
+# Local configuration
+.env
+.env.*
+!.env.example
+.direnv/
+
+# Build and coverage output
+/convomeow
+/cmd/convomeow/convomeow
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+*.coverprofile
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
