@@ -32,6 +32,17 @@ func Open(ctx context.Context, path string) (*Connector, error) {
 
 func (c *Connector) Close() error { return c.container.Close() }
 
+func (c *Connector) ResolveTarget(target core.ConversationTarget) (string, error) {
+	if target.Type != "phone_number" || strings.Contains(target.Value, "@") {
+		return "", fmt.Errorf("%w: target must be a phone number", core.ErrInvalid)
+	}
+	jid, err := recipientJID(target.Value)
+	if err != nil {
+		return "", err
+	}
+	return jid.String(), nil
+}
+
 func (c *Connector) Open(ctx context.Context, identity string, emit func(core.Event)) (core.Session, error) {
 	jid, err := types.ParseJID(identity)
 	if err != nil {
@@ -107,12 +118,27 @@ func (s *session) Login(ctx context.Context, onChallenge func(core.LoginChalleng
 	}
 }
 
-func (s *session) SendText(ctx context.Context, recipient, text string) (core.SentText, error) {
+func (s *session) PrepareText(recipient string) (core.PreparedText, error) {
 	jid, err := recipientJID(recipient)
+	if err != nil {
+		return core.PreparedText{}, err
+	}
+	prepared := core.PreparedText{ChatID: jid.String(), ProviderMessageID: string(s.client.GenerateMessageID())}
+	if s.client.Store != nil && s.client.Store.ID != nil {
+		prepared.SenderID = s.client.Store.ID.ToNonAD().String()
+	}
+	return prepared, nil
+}
+
+func (s *session) SendText(ctx context.Context, prepared core.PreparedText, text string) (core.SentText, error) {
+	jid, err := recipientJID(prepared.ChatID)
 	if err != nil {
 		return core.SentText{}, err
 	}
-	response, err := s.client.SendMessage(ctx, jid, &waE2E.Message{Conversation: proto.String(text)})
+	if prepared.ProviderMessageID == "" {
+		return core.SentText{}, fmt.Errorf("%w: missing provider message ID", core.ErrInvalid)
+	}
+	response, err := s.client.SendMessage(ctx, jid, &waE2E.Message{Conversation: proto.String(text)}, whatsmeow.SendRequestExtra{ID: types.MessageID(prepared.ProviderMessageID)})
 	if err != nil {
 		return core.SentText{}, err
 	}
@@ -120,10 +146,7 @@ func (s *session) SendText(ctx context.Context, recipient, text string) (core.Se
 	if chat.IsEmpty() {
 		chat = jid
 	}
-	sent := core.SentText{ChatID: chat.String(), ProviderMessageID: string(response.ID), Timestamp: response.Timestamp}
-	if s.client.Store != nil && s.client.Store.ID != nil {
-		sent.SenderID = s.client.Store.ID.ToNonAD().String()
-	}
+	sent := core.SentText{ChatID: chat.String(), ProviderMessageID: string(response.ID), SenderID: prepared.SenderID, Timestamp: response.Timestamp}
 	return sent, nil
 }
 

@@ -1,0 +1,636 @@
+openapi: 3.1.0
+info:
+  title: ConvoMeow native API
+  version: 0.1.0
+  description: >-
+    The v1 API covers WhatsApp linked-device accounts, pairing, conversations,
+    and text messages.
+security:
+  - bearerToken: []
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Check process health
+      security: []
+      responses:
+        '200':
+          description: Process is running.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /api/versions:
+    get:
+      operationId: getAPIVersions
+      summary: List supported native API versions
+      security: []
+      responses:
+        '200':
+          description: Supported versions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [versions]
+                properties:
+                  versions:
+                    type: array
+                    items:
+                      type: string
+              example:
+                versions: [v1]
+  /api/v1/accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts
+      responses:
+        '200':
+          description: Accounts in this installation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createAccount
+      summary: Create a WhatsApp linked-device account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccount'
+            example:
+              label: sales
+              provider: whatsapp
+              connection_kind: linked_device
+      responses:
+        '201':
+          description: Account created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: getAccount
+      summary: Read an account
+      responses:
+        '200':
+          description: Account and connection state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts/{id}/login-attempts:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: startLoginAttempt
+      summary: Start WhatsApp pairing
+      responses:
+        '202':
+          description: Pairing started. Poll the Location URL for a QR challenge.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginAttempt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/login-attempts/{attempt_id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - name: attempt_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getLoginAttempt
+      summary: Read a pairing attempt
+      responses:
+        '200':
+          description: Current pairing state and any active QR challenge.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginAttempt'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/accounts/{id}/conversations:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: createConversation
+      summary: Find or create a conversation for a phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversation'
+            example:
+              target:
+                type: phone_number
+                value: '+15551234567'
+      responses:
+        '200':
+          description: Existing conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '201':
+          description: Conversation created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/conversations:
+    get:
+      operationId: listConversations
+      summary: List conversations
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+          description: Limit the list to one account.
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Newest conversations first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/conversations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getConversation
+      summary: Read a conversation
+      responses:
+        '200':
+          description: Conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/conversations/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: listConversationMessages
+      summary: List messages in a conversation
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Newest messages first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      operationId: sendTextMessage
+      summary: Send a text message
+      description: >-
+        ConvoMeow stores a send record before calling WhatsApp. A provider error
+        can leave the record in outcome_unknown; inspect the message before retrying.
+        Reuse the same Idempotency-Key to retrieve the same send record.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            pattern: '^[!-~]{8,128}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendText'
+            example:
+              kind: text
+              content:
+                text: Hello
+      responses:
+        '201':
+          description: Send record created or returned for a repeated key.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unsupported'
+  /api/v1/messages:
+    get:
+      operationId: listAccountMessages
+      summary: List messages for one account
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Newest messages first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/messages/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getMessage
+      summary: Read a message
+      responses:
+        '200':
+          description: Message and current send state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: >-
+        The current control token grants access to every account. Keep this API
+        on loopback until user sessions and scoped API keys are implemented.
+  parameters:
+    AccountID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    ConversationID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+      description: Use next_cursor from the previous page.
+  responses:
+    BadRequest:
+      description: Invalid JSON, field, or query value.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Bearer token missing or invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Conflicting state or idempotency key.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unsupported:
+      description: Message kind is not supported for sending.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooLarge:
+      description: JSON body exceeds 1 MiB.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedMediaType:
+      description: Request body is not application/json.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, request_id]
+      properties:
+        type:
+          type: string
+          const: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        request_id:
+          type: string
+    CreateAccount:
+      type: object
+      additionalProperties: false
+      required: [label, provider, connection_kind]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z0-9_-]{1,64}$'
+        provider:
+          type: string
+          const: whatsapp
+        connection_kind:
+          type: string
+          const: linked_device
+    Account:
+      type: object
+      required: [id, provider, connection_kind, label, state, capabilities, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        connection_kind:
+          type: string
+        label:
+          type: string
+        provider_identity:
+          type: string
+        state:
+          type: string
+        last_error:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AccountPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Account'
+    LoginAttempt:
+      type: object
+      required: [id, state]
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+        challenge:
+          type: object
+          required: [type, value, expires_at]
+          properties:
+            type:
+              type: string
+            value:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+        error:
+          type: string
+    CreateConversation:
+      type: object
+      additionalProperties: false
+      required: [target]
+      properties:
+        target:
+          type: object
+          additionalProperties: false
+          required: [type, value]
+          properties:
+            type:
+              type: string
+              const: phone_number
+            value:
+              type: string
+    Conversation:
+      type: object
+      required: [id, account_id, provider_chat_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        provider_chat_id:
+          type: string
+          description: Provider identifier for display or interoperability. Use id in URL paths.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        last_message:
+          $ref: '#/components/schemas/Message'
+    ConversationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+        next_cursor:
+          type: string
+    SendText:
+      type: object
+      additionalProperties: false
+      required: [kind, content]
+      properties:
+        kind:
+          type: string
+          const: text
+        content:
+          type: object
+          additionalProperties: false
+          required: [text]
+          properties:
+            text:
+              type: string
+              minLength: 1
+              description: 1-4096 UTF-8 bytes after trimming surrounding whitespace.
+    Message:
+      type: object
+      required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        conversation_id:
+          type: string
+        provider_message_id:
+          type: string
+        direction:
+          type: string
+        state:
+          type: string
+          description: >-
+            Inbound messages are received. Outbound messages may be queued,
+            sent, failed, or outcome_unknown.
+        sender_id:
+          type: string
+        kind:
+          type: string
+        content:
+          type: object
+          properties:
+            text:
+              type: string
+            caption:
+              type: string
+        occurred_at:
+          type: string
+          format: date-time
+        ingested_at:
+          type: string
+          format: date-time
+    MessagePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        next_cursor:
+          type: string

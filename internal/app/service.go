@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,6 +22,7 @@ type runtimeAccount struct {
 	state      string
 	lastError  string
 	loginState string
+	loginID    string
 	challenge  *core.LoginChallenge
 	session    core.Session
 }
@@ -115,7 +118,10 @@ func (s *Service) Close() error {
 	return errors.Join(connectorErr, repoErr)
 }
 
-func (s *Service) CreateAccount(ctx context.Context, label string) (core.AccountStatus, error) {
+func (s *Service) CreateAccount(ctx context.Context, label, provider, connectionKind string) (core.AccountStatus, error) {
+	if provider != core.ProviderWhatsApp || connectionKind != core.ConnectionKindLinkedDevice {
+		return core.AccountStatus{}, fmt.Errorf("%w: unsupported provider or connection kind", core.ErrInvalid)
+	}
 	label = strings.TrimSpace(label)
 	if len(label) < 1 || len(label) > 64 {
 		return core.AccountStatus{}, fmt.Errorf("%w: label must be 1-64 characters", core.ErrInvalid)
@@ -126,7 +132,7 @@ func (s *Service) CreateAccount(ctx context.Context, label string) (core.Account
 		}
 	}
 	now := time.Now().UTC()
-	a := core.Account{ID: uuid.NewString(), Provider: core.ProviderWhatsApp, Label: label, CreatedAt: now, UpdatedAt: now}
+	a := core.Account{ID: uuid.NewString(), Provider: provider, ConnectionKind: connectionKind, Label: label, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.CreateAccount(ctx, a); err != nil {
 		return core.AccountStatus{}, err
 	}
@@ -159,18 +165,21 @@ func (s *Service) Account(id string) (core.AccountStatus, error) {
 	return rt.status(), nil
 }
 
-func (s *Service) LoginStatus(id string) (core.LoginStatus, error) {
+func (s *Service) LoginStatus(id, attemptID string) (core.LoginStatus, error) {
 	rt, err := s.runtime(id)
 	if err != nil {
 		return core.LoginStatus{}, err
 	}
 	rt.mu.RLock()
 	defer rt.mu.RUnlock()
+	if attemptID == "" || rt.loginID != attemptID {
+		return core.LoginStatus{}, core.ErrNotFound
+	}
 	state := rt.loginState
 	if rt.state == "connected" {
 		state = "connected"
 	}
-	return core.LoginStatus{State: state, Challenge: rt.challenge, Error: rt.lastError}, nil
+	return core.LoginStatus{ID: rt.loginID, State: state, Challenge: rt.challenge, Error: rt.lastError}, nil
 }
 
 func (s *Service) StartLogin(id string) (core.LoginStatus, error) {
@@ -199,7 +208,9 @@ func (s *Service) StartLogin(id string) (core.LoginStatus, error) {
 		s.loginMu.Unlock()
 		return core.LoginStatus{}, err
 	}
+	attemptID := uuid.NewString()
 	rt.mu.Lock()
+	rt.loginID = attemptID
 	rt.session = session
 	rt.state = "pairing"
 	rt.loginState = "waiting_for_challenge"
@@ -219,7 +230,7 @@ func (s *Service) StartLogin(id string) (core.LoginStatus, error) {
 		})
 		s.finishLogin(id, rt, session, err)
 	}()
-	return core.LoginStatus{State: "waiting_for_challenge"}, nil
+	return core.LoginStatus{ID: attemptID, State: "waiting_for_challenge"}, nil
 }
 
 func (s *Service) finishLogin(id string, rt *runtimeAccount, session core.Session, loginErr error) {
@@ -265,14 +276,60 @@ func (s *Service) finishLogin(id string, rt *runtimeAccount, session core.Sessio
 	rt.mu.Unlock()
 }
 
-func (s *Service) SendText(ctx context.Context, id, recipient, text string) (core.Message, error) {
-	rt, err := s.runtime(id)
-	if err != nil {
-		return core.Message{}, err
+func (s *Service) CreateConversation(ctx context.Context, accountID string, target core.ConversationTarget) (core.Conversation, bool, error) {
+	if _, err := s.runtime(accountID); err != nil {
+		return core.Conversation{}, false, err
 	}
+	chatID, err := s.connector.ResolveTarget(target)
+	if err != nil {
+		return core.Conversation{}, false, err
+	}
+	return s.repo.GetOrCreateConversation(ctx, accountID, chatID)
+}
+
+func (s *Service) Conversation(ctx context.Context, id string) (core.Conversation, error) {
+	return s.repo.GetConversation(ctx, id)
+}
+
+func (s *Service) ListConversations(ctx context.Context, accountID string, before *core.PageCursor, limit int) ([]core.Conversation, error) {
+	if accountID != "" {
+		if _, err := s.runtime(accountID); err != nil {
+			return nil, err
+		}
+	}
+	if err := validatePage(limit); err != nil {
+		return nil, err
+	}
+	return s.repo.ListConversations(ctx, accountID, before, limit)
+}
+
+func (s *Service) SendText(ctx context.Context, conversationID, text, key string) (core.Message, error) {
+	requestedText := text
 	text = strings.TrimSpace(text)
 	if text == "" || len(text) > 4096 {
 		return core.Message{}, fmt.Errorf("%w: text must be 1-4096 bytes", core.ErrInvalid)
+	}
+	if len(key) < 8 || len(key) > 128 {
+		return core.Message{}, fmt.Errorf("%w: Idempotency-Key must be 8-128 characters", core.ErrInvalid)
+	}
+	for _, char := range key {
+		if char < 33 || char > 126 {
+			return core.Message{}, fmt.Errorf("%w: Idempotency-Key must contain printable ASCII without spaces", core.ErrInvalid)
+		}
+	}
+	conversation, err := s.repo.GetConversation(ctx, conversationID)
+	if err != nil {
+		return core.Message{}, err
+	}
+	hash := sha256.Sum256([]byte(conversationID + "\x00text\x00" + requestedText))
+	requestHash := hex.EncodeToString(hash[:])
+	const actorID = "control"
+	if saved, found, err := s.repo.LookupSend(ctx, actorID, key, requestHash); err != nil || found {
+		return saved, err
+	}
+	rt, err := s.runtime(conversation.AccountID)
+	if err != nil {
+		return core.Message{}, err
 	}
 	rt.mu.RLock()
 	state, session := rt.state, rt.session
@@ -280,77 +337,68 @@ func (s *Service) SendText(ctx context.Context, id, recipient, text string) (cor
 	if state != "connected" || session == nil {
 		return core.Message{}, core.ErrNotConnected
 	}
-	sent, err := session.SendText(ctx, recipient, text)
+	prepared, err := session.PrepareText(conversation.ProviderChatID)
 	if err != nil {
-		if errors.Is(err, core.ErrInvalid) {
-			return core.Message{}, err
-		}
-		return core.Message{}, fmt.Errorf("%w: %v", core.ErrOutcomeUnknown, err)
+		return core.Message{}, err
 	}
-	m := core.Message{AccountID: id, ChatID: sent.ChatID, ProviderMessageID: sent.ProviderMessageID, Direction: "outbound", Kind: core.MessageKindText,
-		SenderID: sent.SenderID, Text: text, OccurredAt: sent.Timestamp}
+	now := time.Now().UTC()
+	message := core.Message{AccountID: conversation.AccountID, ConversationID: conversationID, ChatID: prepared.ChatID,
+		ProviderMessageID: prepared.ProviderMessageID, Direction: "outbound", State: "queued", SenderID: prepared.SenderID,
+		Kind: core.MessageKindText, Text: text, OccurredAt: now, IngestedAt: now}
+	reserved, created, err := s.repo.ReserveSend(ctx, message, actorID, key, requestHash)
+	if err != nil || !created {
+		return reserved, err
+	}
+	sent, sendErr := session.SendText(ctx, prepared, text)
+	result := "sent"
+	if sendErr != nil {
+		result = "outcome_unknown"
+		if errors.Is(sendErr, core.ErrInvalid) {
+			result = "failed"
+		}
+		s.logger.Warn("message send failed", "message_id", reserved.ID, "account_id", conversation.AccountID, "error", sendErr)
+	} else if sent.ProviderMessageID != prepared.ProviderMessageID {
+		result = "outcome_unknown"
+		s.logger.Error("provider changed prepared message ID", "message_id", reserved.ID, "account_id", conversation.AccountID)
+	}
 	recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	saved, err := s.repo.SaveMessage(recordCtx, m)
+	completed, err := s.repo.CompleteSend(recordCtx, reserved.ID, result, sent)
 	if err != nil {
-		return m, fmt.Errorf("%w: %v", core.ErrSentUnrecorded, err)
+		return reserved, fmt.Errorf("record send result for message %s: %w", reserved.ID, err)
 	}
-	return saved, nil
+	return completed, nil
 }
 
-func (s *Service) ListMessages(ctx context.Context, id string, after int64, limit int) ([]core.Message, error) {
-	if _, err := s.runtime(id); err != nil {
-		return nil, err
-	}
-	if after < 0 {
-		return nil, core.ErrInvalid
-	}
-	limit, err := pageLimit(limit)
-	if err != nil {
-		return nil, err
-	}
-	return s.repo.ListMessages(ctx, id, after, limit)
+func (s *Service) Message(ctx context.Context, id string) (core.Message, error) {
+	return s.repo.GetMessage(ctx, id)
 }
 
-func (s *Service) ListChats(ctx context.Context, id string, before int64, limit int) ([]core.Chat, error) {
-	if _, err := s.runtime(id); err != nil {
+func (s *Service) ListMessages(ctx context.Context, accountID string, before *core.PageCursor, limit int) ([]core.Message, error) {
+	if _, err := s.runtime(accountID); err != nil {
 		return nil, err
 	}
-	if before < 0 {
-		return nil, core.ErrInvalid
-	}
-	limit, err := pageLimit(limit)
-	if err != nil {
+	if err := validatePage(limit); err != nil {
 		return nil, err
 	}
-	return s.repo.ListChats(ctx, id, before, limit)
+	return s.repo.ListMessages(ctx, accountID, before, limit)
 }
 
-func (s *Service) ListChatMessages(ctx context.Context, id, chatID string, before int64, limit int) ([]core.Message, error) {
-	if _, err := s.runtime(id); err != nil {
+func (s *Service) ListConversationMessages(ctx context.Context, conversationID string, before *core.PageCursor, limit int) ([]core.Message, error) {
+	if _, err := s.repo.GetConversation(ctx, conversationID); err != nil {
 		return nil, err
 	}
-	if chatID == "" || before < 0 {
-		return nil, core.ErrInvalid
-	}
-	limit, err := pageLimit(limit)
-	if err != nil {
+	if err := validatePage(limit); err != nil {
 		return nil, err
 	}
-	return s.repo.ListChatMessages(ctx, id, chatID, before, limit)
+	return s.repo.ListConversationMessages(ctx, conversationID, before, limit)
 }
 
-func pageLimit(limit int) (int, error) {
-	if limit < 0 {
-		return 0, core.ErrInvalid
+func validatePage(limit int) error {
+	if limit < 1 || limit > 201 {
+		return core.ErrInvalid
 	}
-	if limit == 0 {
-		return 100, nil
-	}
-	if limit > 500 {
-		return 500, nil
-	}
-	return limit, nil
+	return nil
 }
 
 func (s *Service) runtime(id string) (*runtimeAccount, error) {

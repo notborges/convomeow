@@ -5,7 +5,8 @@
 - Keep `cmd/convomeow` focused on startup, configuration, and shutdown.
 - Put account and message behavior in `internal/app`. Keep `internal/core` limited to types and contracts shared across providers.
 - Keep whatsmeow imports and WhatsApp-specific data in `internal/providers/whatsapp`. Translate provider data at that boundary so future connectors can use the same app layer.
-- Keep persistence and migrations in `internal/store/sqlite`, HTTP handling in `internal/api/native`, and CLI commands in `internal/cli`.
+- Keep persistence and schema setup in `internal/store/sqlite`, HTTP handling in `internal/api/native`, and CLI commands in `internal/cli`.
+- Before 1.0, create the current schema for fresh installations. Do not add upgrade migrations for unreleased versions.
 - Keep `/api/v1` as ConvoMeow's native API. Put Evolution-compatible routes in a separate adapter and check paths, authentication, bodies, responses, and webhooks against Evolution's published contract.
 - Add abstractions when a working feature needs them. Do not add unused routes or provider capabilities in anticipation of Telegram or a web client.
 - Never commit tokens, session files, QR codes, message dumps, or the local `planning/` directory.
@@ -14,7 +15,7 @@
 
 - Use clear names, small functions, and `gofmt`. Handle errors at the boundary where they can be explained or acted on.
 - Comment only to explain a non-obvious invariant, protocol detail, concurrency rule, or security decision. Do not narrate what the next line does or leave placeholder TODOs.
-- Keep user-facing text direct and factual. Use “I” for the maintainer's voice. Name the WhatsApp behaviors that still need a real-account check.
+- Keep user-facing text direct and factual. Avoid first-person phrasing in documentation. Name the WhatsApp behaviors that still need a real-account check.
 
 ## Commits and checks
 

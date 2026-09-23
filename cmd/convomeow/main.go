@@ -76,7 +76,7 @@ func serve(paths config.Paths, listen string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	repo, err := sqlite.Open(ctx, paths.AppDB)
 	if err != nil {
@@ -96,10 +96,8 @@ func serve(paths config.Paths, listen string) error {
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServe() }()
 	slog.Info("service started", "listen", listen, "data_dir", paths.Dir, "accounts", len(service.ListAccounts()))
-	stopCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	select {
-	case <-stopCtx.Done():
+	case <-ctx.Done():
 	case err := <-serverErr:
 		if !errors.Is(err, http.ErrServerClosed) {
 			service.Close()

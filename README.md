@@ -19,7 +19,7 @@ In another terminal:
 ./convomeow account list
 ./convomeow message send sales +15551234567 'Hello'
 ./convomeow chat list sales
-./convomeow chat messages sales '<chat-id>'
+./convomeow chat messages sales '<conversation-id>'
 ./convomeow message list sales
 ```
 
@@ -35,37 +35,37 @@ The CLI displays a QR code during pairing. Scan it from WhatsApp's **Linked devi
 
 ## Native API
 
-The CLI talks to ConvoMeow through the `/api/v1` routes below. I chose their URLs and JSON format for this project. Existing Evolution API clients cannot use them. I plan to add Evolution's WhatsApp routes as another HTTP layer over the same application code, using its [v2 API specification](https://github.com/evolution-foundation/docs-evolution/blob/main/openapi/openapi-v2.json).
+The CLI uses ConvoMeow's native API. The [OpenAPI file](docs/api/openapi-v1.yaml) defines the current routes and payloads.
 
 On first start, the daemon creates `data/control.token`. Send its value as `Authorization: Bearer <token>` on every `/api/v1` request. The token grants access to all accounts. Keep the API on loopback, or place it behind HTTPS and access controls if you change the listen address.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/healthz` | Process health; no token required |
+| `GET` | `/healthz`, `/api/versions` | Process health and API versions; no token required |
 | `POST`, `GET` | `/api/v1/accounts` | Create and list accounts |
 | `GET` | `/api/v1/accounts/{id}` | Account connection state |
-| `POST`, `GET` | `/api/v1/accounts/{id}/login` | Start pairing and poll QR or connection state |
-| `POST`, `GET` | `/api/v1/accounts/{id}/messages` | Send text and read saved messages |
-| `GET` | `/api/v1/accounts/{id}/chats` | List chats with saved messages |
-| `GET` | `/api/v1/accounts/{id}/chats/{chat_id}/messages` | Read saved messages in one chat |
+| `POST` | `/api/v1/accounts/{id}/login-attempts` | Start pairing |
+| `GET` | `/api/v1/accounts/{id}/login-attempts/{attempt_id}` | Read the QR challenge or pairing state |
+| `POST` | `/api/v1/accounts/{id}/conversations` | Find or create a conversation for a phone number |
+| `GET` | `/api/v1/conversations`, `/api/v1/conversations/{id}` | List and read conversations |
+| `GET`, `POST` | `/api/v1/conversations/{id}/messages` | Read a thread or send text |
+| `GET` | `/api/v1/messages`, `/api/v1/messages/{id}` | Read an account's messages or one message |
 
-Create an account with `{"label":"sales"}`. Send text with `{"to":"+15551234567","text":"Hello"}`. Read messages with `?after=0&limit=100`; use the last returned `id` as the next cursor. API paths use account UUIDs, while the CLI accepts account labels.
+Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. Send to its ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
 
-Chat and per-chat message lists return the newest items first. Use `?before=0&limit=100` for the first page. For more chats, pass the last chat's `last_message.id` as `before`. For older messages in one chat, pass the last message's `id`.
+List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
 
-URL-encode the chat ID in the path. A chat appears in the list after ConvoMeow saves its first message. To reply, send text to that chat ID through the existing message endpoint.
+ConvoMeow assigns conversation and message IDs. WhatsApp chat IDs appear as read-only `provider_chat_id` values; API paths use ConvoMeow IDs.
 
-If a send returns `outcome_unknown`, check the chat before retrying. WhatsApp may have received the message.
+The API saves an outgoing message before asking WhatsApp to send it. A failed request may leave its state as `outcome_unknown`; check that message before sending again. The CLI prints a retry key when a send request fails.
 
 ## Data and limits
 
-`data/app.sqlite` holds accounts and saved messages. `data/whatsmeow.sqlite` holds WhatsApp sessions. Stop the daemon before backing up both files. ConvoMeow creates the data directory and control token with owner-only permissions.
+`data/app.sqlite` holds accounts and saved messages. `data/whatsmeow.sqlite` holds WhatsApp sessions. ConvoMeow creates the data directory and control token with owner-only permissions.
 
 The connector saves messages it receives after startup. For images, videos, audio, documents, stickers, locations, and contacts, it stores the type and any caption. It does not download attachments or import older chats.
 
-I plan to add the web inbox, team roles, Evolution API routes, automation, and Telegram.
-
-I have not tested pairing, messaging, or reconnection with a WhatsApp number yet. If pairing stops after whatsmeow saves a device but before ConvoMeow records its identity, unlink that device in WhatsApp and pair again.
+Pairing, messaging, and reconnection still need testing with a real WhatsApp number.
 
 The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
 
@@ -75,14 +75,14 @@ The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](http
 - `internal/core`: account and message types, plus the connector contract
 - `internal/app`: account sessions, pairing, and message handling
 - `internal/providers/whatsapp`: whatsmeow adapter
-- `internal/store/sqlite`: application database and migrations
-- `internal/api/native`: authenticated HTTP API
+- `internal/store/sqlite`: application database and schema
+- `internal/api/native/v1`: authenticated HTTP API and v1 response types
 - `internal/cli`: API client and QR display
 
 ## Development
 
-I use AI tools to help write ConvoMeow.
+AI tools assist with code and documentation.
 
 Use `make fmt` to format Go files and `make fmt-check` to check them. Run `go build ./...` and `go vet ./...` before contributing a change.
 
-I license ConvoMeow's code under [Apache-2.0](LICENSE). Whatsmeow remains a separate MPL-2.0 dependency.
+ConvoMeow's code is licensed under [Apache-2.0](LICENSE). Whatsmeow remains a separate MPL-2.0 dependency.

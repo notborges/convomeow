@@ -1,0 +1,97 @@
+package v1
+
+import (
+	"time"
+
+	"github.com/notborges/convomeow/internal/core"
+)
+
+type accountResponse struct {
+	ID               string    `json:"id"`
+	Provider         string    `json:"provider"`
+	ConnectionKind   string    `json:"connection_kind"`
+	Label            string    `json:"label"`
+	ProviderIdentity string    `json:"provider_identity,omitempty"`
+	State            string    `json:"state"`
+	LastError        string    `json:"last_error,omitempty"`
+	Capabilities     []string  `json:"capabilities"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func accountFromCore(a core.AccountStatus) accountResponse {
+	return accountResponse{ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
+		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
+		Capabilities: []string{"read_messages", "send_text", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+}
+
+type messageResponse struct {
+	ID                string    `json:"id"`
+	AccountID         string    `json:"account_id"`
+	ConversationID    string    `json:"conversation_id"`
+	ProviderMessageID string    `json:"provider_message_id,omitempty"`
+	Direction         string    `json:"direction"`
+	State             string    `json:"state"`
+	SenderID          string    `json:"sender_id,omitempty"`
+	Kind              string    `json:"kind"`
+	Content           any       `json:"content"`
+	OccurredAt        time.Time `json:"occurred_at"`
+	IngestedAt        time.Time `json:"ingested_at"`
+}
+
+func messageFromCore(m core.Message) messageResponse {
+	var content any = map[string]string{}
+	if m.Kind == core.MessageKindText {
+		content = map[string]string{"text": m.Text}
+	} else if m.Text != "" {
+		content = map[string]string{"caption": m.Text}
+	}
+	return messageResponse{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
+		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
+		Kind: string(m.Kind), Content: content, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
+}
+
+type conversationResponse struct {
+	ID             string           `json:"id"`
+	AccountID      string           `json:"account_id"`
+	ProviderChatID string           `json:"provider_chat_id"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
+	LastMessage    *messageResponse `json:"last_message,omitempty"`
+}
+
+func conversationFromCore(c core.Conversation) conversationResponse {
+	result := conversationResponse{ID: c.ID, AccountID: c.AccountID, ProviderChatID: c.ProviderChatID,
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.LastMessage != nil {
+		last := messageFromCore(*c.LastMessage)
+		result.LastMessage = &last
+	}
+	return result
+}
+
+type pageResponse[T any] struct {
+	Items      []T    `json:"items"`
+	NextCursor string `json:"next_cursor,omitempty"`
+}
+
+type loginAttemptResponse struct {
+	ID        string                  `json:"id"`
+	State     string                  `json:"state"`
+	Challenge *loginChallengeResponse `json:"challenge,omitempty"`
+	Error     string                  `json:"error,omitempty"`
+}
+
+type loginChallengeResponse struct {
+	Type      string    `json:"type"`
+	Value     string    `json:"value"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func loginAttemptFromCore(status core.LoginStatus) loginAttemptResponse {
+	result := loginAttemptResponse{ID: status.ID, State: status.State, Error: status.Error}
+	if status.Challenge != nil {
+		result.Challenge = &loginChallengeResponse{Type: status.Challenge.Type, Value: status.Challenge.Value, ExpiresAt: status.Challenge.ExpiresAt}
+	}
+	return result
+}

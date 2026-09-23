@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/notborges/convomeow/internal/core"
 	"github.com/skip2/go-qrcode"
 )
@@ -23,11 +24,37 @@ type Client struct {
 	http    *http.Client
 }
 
+type page[T any] struct {
+	Items      []T    `json:"items"`
+	NextCursor string `json:"next_cursor"`
+}
+
+type message struct {
+	ID             string `json:"id"`
+	AccountID      string `json:"account_id"`
+	ConversationID string `json:"conversation_id"`
+	Direction      string `json:"direction"`
+	State          string `json:"state"`
+	Kind           string `json:"kind"`
+	Content        struct {
+		Text    string `json:"text"`
+		Caption string `json:"caption"`
+	} `json:"content"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+type conversation struct {
+	ID             string   `json:"id"`
+	AccountID      string   `json:"account_id"`
+	ProviderChatID string   `json:"provider_chat_id"`
+	LastMessage    *message `json:"last_message"`
+}
+
 func New(baseURL, token string) *Client {
 	return &Client{baseURL: strings.TrimRight(baseURL, "/"), token: token, http: &http.Client{Timeout: 40 * time.Second}}
 }
 
-func (c *Client) do(ctx context.Context, method, path string, body, dst any) error {
+func (c *Client) do(ctx context.Context, method, path string, body, dst any, key ...string) error {
 	var reader io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -44,6 +71,9 @@ func (c *Client) do(ctx context.Context, method, path string, body, dst any) err
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if len(key) > 0 {
+		req.Header.Set("Idempotency-Key", key[0])
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
@@ -51,14 +81,12 @@ func (c *Client) do(ctx context.Context, method, path string, body, dst any) err
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		var payload struct {
-			Error struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
+			Code   string `json:"code"`
+			Detail string `json:"detail"`
 		}
 		_ = json.NewDecoder(resp.Body).Decode(&payload)
-		if payload.Error.Message != "" {
-			return fmt.Errorf("%s: %s", payload.Error.Code, payload.Error.Message)
+		if payload.Detail != "" {
+			return fmt.Errorf("%s: %s", payload.Code, payload.Detail)
 		}
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
@@ -69,11 +97,11 @@ func (c *Client) do(ctx context.Context, method, path string, body, dst any) err
 }
 
 func (c *Client) accounts(ctx context.Context) ([]core.AccountStatus, error) {
-	var accounts []core.AccountStatus
-	if err := c.do(ctx, http.MethodGet, "/api/v1/accounts", nil, &accounts); err != nil {
+	var result page[core.AccountStatus]
+	if err := c.do(ctx, http.MethodGet, "/api/v1/accounts", nil, &result); err != nil {
 		return nil, err
 	}
-	return accounts, nil
+	return result.Items, nil
 }
 
 func (c *Client) resolve(ctx context.Context, name string) (core.AccountStatus, error) {
@@ -93,6 +121,9 @@ func (c *Client) Run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return usage()
 	}
+	if err := c.requireVersion(ctx); err != nil {
+		return err
+	}
 	switch args[0] {
 	case "account":
 		return c.account(ctx, args[1:])
@@ -105,6 +136,21 @@ func (c *Client) Run(ctx context.Context, args []string) error {
 	}
 }
 
+func (c *Client) requireVersion(ctx context.Context) error {
+	var result struct {
+		Versions []string `json:"versions"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/versions", nil, &result); err != nil {
+		return fmt.Errorf("read server API versions: %w", err)
+	}
+	for _, version := range result.Versions {
+		if version == "v1" {
+			return nil
+		}
+	}
+	return errors.New("server does not support API v1")
+}
+
 func (c *Client) account(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return usage()
@@ -115,7 +161,9 @@ func (c *Client) account(ctx context.Context, args []string) error {
 			return usage()
 		}
 		var a core.AccountStatus
-		if err := c.do(ctx, http.MethodPost, "/api/v1/accounts", map[string]string{"label": args[1]}, &a); err != nil {
+		if err := c.do(ctx, http.MethodPost, "/api/v1/accounts", map[string]string{
+			"label": args[1], "provider": core.ProviderWhatsApp, "connection_kind": core.ConnectionKindLinkedDevice,
+		}, &a); err != nil {
 			return err
 		}
 		fmt.Printf("Created %s (%s)\n", a.Label, a.ID)
@@ -147,11 +195,12 @@ func (c *Client) login(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/login"
+	path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/login-attempts"
 	var status core.LoginStatus
-	if err := c.do(ctx, http.MethodPost, path, map[string]any{}, &status); err != nil {
+	if err := c.do(ctx, http.MethodPost, path, nil, &status); err != nil {
 		return err
 	}
+	path += "/" + url.PathEscape(status.ID)
 	fmt.Println("Waiting for WhatsApp pairing QR...")
 	lastQR := ""
 	lastState := ""
@@ -198,35 +247,44 @@ func (c *Client) message(ctx context.Context, args []string) error {
 	}
 	switch args[0] {
 	case "send":
-		if len(args) < 4 {
+		sendArgs := args[1:]
+		key := uuid.NewString()
+		if len(sendArgs) >= 2 && sendArgs[0] == "--key" {
+			key = sendArgs[1]
+			sendArgs = sendArgs[2:]
+		}
+		if len(sendArgs) < 3 {
 			return usage()
 		}
-		account, err := c.resolve(ctx, args[1])
+		account, err := c.resolve(ctx, sendArgs[0])
 		if err != nil {
 			return err
 		}
-		path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/messages"
-		var response json.RawMessage
-		if err := c.do(ctx, http.MethodPost, path, map[string]string{"to": args[2], "text": strings.Join(args[3:], " ")}, &response); err != nil {
-			return err
-		}
-		var envelope struct {
-			Message core.Message `json:"message"`
-			Warning string       `json:"warning"`
-		}
-		if err := json.Unmarshal(response, &envelope); err != nil {
-			return err
-		}
-		message := envelope.Message
-		if message.ProviderMessageID == "" {
-			if err := json.Unmarshal(response, &message); err != nil {
+		conversationID := sendArgs[1]
+		if _, err := uuid.Parse(conversationID); err == nil {
+			var existing conversation
+			if err := c.do(ctx, http.MethodGet, "/api/v1/conversations/"+url.PathEscape(conversationID), nil, &existing); err != nil {
 				return err
 			}
+			if existing.AccountID != account.ID {
+				return fmt.Errorf("conversation belongs to account %s", existing.AccountID)
+			}
+		} else {
+			path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/conversations"
+			var created conversation
+			body := map[string]any{"target": map[string]string{"type": "phone_number", "value": conversationID}}
+			if err := c.do(ctx, http.MethodPost, path, body, &created); err != nil {
+				return err
+			}
+			conversationID = created.ID
 		}
-		if envelope.Warning != "" {
-			fmt.Println(envelope.Warning)
+		path := "/api/v1/conversations/" + url.PathEscape(conversationID) + "/messages"
+		body := map[string]any{"kind": "text", "content": map[string]string{"text": strings.Join(sendArgs[2:], " ")}}
+		var sent message
+		if err := c.do(ctx, http.MethodPost, path, body, &sent, key); err != nil {
+			return fmt.Errorf("%w (retry with --key %s)", err, key)
 		}
-		fmt.Println("Message ID:", message.ProviderMessageID)
+		fmt.Printf("Message %s: %s\n", sent.ID, sent.State)
 		return nil
 	case "list":
 		if len(args) != 2 {
@@ -236,13 +294,13 @@ func (c *Client) message(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/messages?limit=100"
-		var messages []core.Message
-		if err := c.do(ctx, http.MethodGet, path, nil, &messages); err != nil {
+		path := "/api/v1/messages?account_id=" + url.QueryEscape(account.ID) + "&limit=100"
+		var result page[message]
+		if err := c.do(ctx, http.MethodGet, path, nil, &result); err != nil {
 			return err
 		}
-		for _, m := range messages {
-			fmt.Printf("%d %s %-8s %-25s %s\n", m.ID, m.OccurredAt.Local().Format("2006-01-02 15:04"), m.Direction, m.ChatID, messagePreview(m))
+		for _, m := range result.Items {
+			fmt.Printf("%s %s %-8s %-16s %s\n", m.ID, m.OccurredAt.Local().Format("2006-01-02 15:04"), m.Direction, m.State, messagePreview(m))
 		}
 		return nil
 	default:
@@ -263,13 +321,17 @@ func (c *Client) chat(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/chats?limit=100"
-		var chats []core.Chat
-		if err := c.do(ctx, http.MethodGet, path, nil, &chats); err != nil {
+		path := "/api/v1/conversations?account_id=" + url.QueryEscape(account.ID) + "&limit=100"
+		var result page[conversation]
+		if err := c.do(ctx, http.MethodGet, path, nil, &result); err != nil {
 			return err
 		}
-		for _, chat := range chats {
-			fmt.Printf("%s  %s  %s\n", chat.LastMessage.OccurredAt.Local().Format("2006-01-02 15:04"), chat.ID, messagePreview(chat.LastMessage))
+		for _, chat := range result.Items {
+			preview := ""
+			if chat.LastMessage != nil {
+				preview = messagePreview(*chat.LastMessage)
+			}
+			fmt.Printf("%s  %-35s  %s\n", chat.ID, chat.ProviderChatID, preview)
 		}
 		return nil
 	case "messages":
@@ -280,14 +342,21 @@ func (c *Client) chat(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/chats/" + url.PathEscape(args[2]) + "/messages?limit=100"
-		var messages []core.Message
-		if err := c.do(ctx, http.MethodGet, path, nil, &messages); err != nil {
+		var chat conversation
+		if err := c.do(ctx, http.MethodGet, "/api/v1/conversations/"+url.PathEscape(args[2]), nil, &chat); err != nil {
 			return err
 		}
-		for i := len(messages) - 1; i >= 0; i-- {
-			message := messages[i]
-			fmt.Printf("%s  %-8s  %s\n", message.OccurredAt.Local().Format("2006-01-02 15:04"), message.Direction, messagePreview(message))
+		if chat.AccountID != account.ID {
+			return fmt.Errorf("conversation belongs to account %s", chat.AccountID)
+		}
+		path := "/api/v1/conversations/" + url.PathEscape(chat.ID) + "/messages?limit=100"
+		var result page[message]
+		if err := c.do(ctx, http.MethodGet, path, nil, &result); err != nil {
+			return err
+		}
+		for i := len(result.Items) - 1; i >= 0; i-- {
+			item := result.Items[i]
+			fmt.Printf("%s  %-8s  %s\n", item.OccurredAt.Local().Format("2006-01-02 15:04"), item.Direction, messagePreview(item))
 		}
 		return nil
 	default:
@@ -295,14 +364,14 @@ func (c *Client) chat(ctx context.Context, args []string) error {
 	}
 }
 
-func messagePreview(message core.Message) string {
-	if message.Kind == core.MessageKindText || message.Kind == "" {
-		return message.Text
+func messagePreview(message message) string {
+	if message.Kind == "text" || message.Kind == "" {
+		return message.Content.Text
 	}
-	if message.Text == "" {
-		return "[" + string(message.Kind) + "]"
+	if message.Content.Caption == "" {
+		return "[" + message.Kind + "]"
 	}
-	return "[" + string(message.Kind) + "] " + message.Text
+	return "[" + message.Kind + "] " + message.Content.Caption
 }
 
 func renderQR(w io.Writer, data string) error {
@@ -333,5 +402,5 @@ func renderQR(w io.Writer, data string) error {
 }
 
 func usage() error {
-	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | chat list ACCOUNT | chat messages ACCOUNT CHAT | message send ACCOUNT RECIPIENT TEXT | message list ACCOUNT")
+	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message list ACCOUNT")
 }
