@@ -94,9 +94,6 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Close() error {
-	s.eventMu.Lock()
-	s.closing = true
-	s.eventMu.Unlock()
 	s.cancel()
 	s.mu.RLock()
 	var sessions []core.Session
@@ -112,6 +109,9 @@ func (s *Service) Close() error {
 		session.Close()
 	}
 	s.workWG.Wait()
+	s.eventMu.Lock()
+	s.closing = true
+	s.eventMu.Unlock()
 	s.eventWG.Wait()
 	connectorErr := s.connector.Close()
 	repoErr := s.repo.Close()
@@ -521,10 +521,17 @@ func (s *Service) onEvent(id string, event core.Event) {
 		}
 		message := *event.Message
 		message.AccountID = id
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if _, err := s.repo.SaveMessage(ctx, message); err != nil {
+		if _, err := s.repo.SaveMessage(context.Background(), message); err != nil {
 			s.logger.Error("save incoming message failed", "account_id", id, "error", err)
+		}
+	case core.EventHistory:
+		if event.History == nil {
+			return
+		}
+		batch := *event.History
+		batch.AccountID = id
+		if err := s.repo.ImportHistory(context.Background(), batch); err != nil {
+			s.logger.Error("import history batch failed", "account_id", id, "message_count", len(batch.Messages), "error", err)
 		}
 	}
 }

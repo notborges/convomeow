@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/notborges/convomeow/internal/core"
@@ -63,13 +64,26 @@ func (c *Connector) New(emit func(core.Event)) (core.Session, error) {
 }
 
 type session struct {
-	client *whatsmeow.Client
+	client        *whatsmeow.Client
+	emit          func(core.Event)
+	history       chan *events.HistorySync
+	historyMu     sync.Mutex
+	historyWG     sync.WaitGroup
+	historyClosed bool
 }
 
 func newSession(device *store.Device, emit func(core.Event)) core.Session {
 	client := whatsmeow.NewClient(device, nil)
-	client.AddEventHandler(func(evt any) { translateEvent(emit, evt) })
-	return &session{client: client}
+	s := &session{client: client, emit: emit, history: make(chan *events.HistorySync, 2)}
+	s.historyWG.Add(1)
+	go func() {
+		defer s.historyWG.Done()
+		for event := range s.history {
+			s.importHistory(event)
+		}
+	}()
+	client.AddEventHandler(s.handleEvent)
+	return s
 }
 
 func (s *session) Identity() string {
@@ -81,7 +95,36 @@ func (s *session) Identity() string {
 
 func (s *session) Connect() error { return s.client.Connect() }
 
-func (s *session) Close() { s.client.Disconnect() }
+func (s *session) Close() {
+	s.client.Disconnect()
+	s.closeHistoryQueue()
+	s.historyWG.Wait()
+}
+
+func (s *session) closeHistoryQueue() {
+	s.historyMu.Lock()
+	if !s.historyClosed {
+		s.historyClosed = true
+		close(s.history)
+	}
+	s.historyMu.Unlock()
+}
+
+func (s *session) handleEvent(evt any) {
+	if history, ok := evt.(*events.HistorySync); ok {
+		s.historyMu.Lock()
+		if !s.historyClosed {
+			s.history <- history
+		}
+		s.historyMu.Unlock()
+		return
+	}
+	if _, ok := evt.(*events.LoggedOut); ok {
+		s.closeHistoryQueue()
+		s.historyWG.Wait()
+	}
+	translateEvent(s.emit, evt)
+}
 
 func (s *session) Login(ctx context.Context, onChallenge func(core.LoginChallenge)) error {
 	qr, err := s.client.GetQRChannel(ctx)
@@ -188,22 +231,30 @@ func translateEvent(emit func(core.Event), evt any) {
 	case *events.TemporaryBan:
 		emit(core.Event{Type: core.EventError, Err: fmt.Errorf("temporary ban: %s", e.String())})
 	case *events.Message:
-		if e.Message == nil {
-			return
+		if message := translateMessage(e); message != nil {
+			emit(core.Event{Type: core.EventMessage, Message: message})
 		}
-		kind, text := messageContent(e.Message)
-		if kind == "" || e.Info.ID == "" || e.Info.Chat.IsEmpty() {
-			return
-		}
-		direction := "inbound"
-		if e.Info.IsFromMe {
-			direction = "outbound"
-		}
-		emit(core.Event{Type: core.EventMessage, Message: &core.Message{
-			ChatID: e.Info.Chat.String(), ProviderMessageID: string(e.Info.ID), Direction: direction, Kind: kind,
-			SenderID: e.Info.Sender.String(), Text: text, OccurredAt: e.Info.Timestamp,
-		}})
 	}
+}
+
+func translateMessage(event *events.Message) *core.Message {
+	if event == nil || event.Message == nil || event.Info.ID == "" || event.Info.Chat.IsEmpty() {
+		return nil
+	}
+	kind, text := messageContent(event.Message)
+	if kind == "" {
+		return nil
+	}
+	direction := "inbound"
+	if event.Info.IsFromMe {
+		direction = "outbound"
+	}
+	message := &core.Message{ChatID: event.Info.Chat.String(), ProviderMessageID: string(event.Info.ID),
+		Direction: direction, Kind: kind, SenderID: event.Info.Sender.String(), Text: text, OccurredAt: event.Info.Timestamp}
+	if attachment := mediaAttachment(event.Message, kind, event.IsViewOnce); attachment != nil {
+		message.Attachments = []core.Attachment{*attachment}
+	}
+	return message
 }
 
 func messageContent(message *waE2E.Message) (core.MessageKind, string) {

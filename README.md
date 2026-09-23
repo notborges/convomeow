@@ -53,7 +53,7 @@ On first start, the daemon creates `data/control.token`. Send its value as `Auth
 
 Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. Send to its ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
 
-List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
+List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Messages use WhatsApp timestamps, so imported history appears below newer messages even when it arrives later. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
 
 ConvoMeow assigns conversation and message IDs. WhatsApp chat IDs appear as read-only `provider_chat_id` values; API paths use ConvoMeow IDs.
 
@@ -61,11 +61,11 @@ The API saves an outgoing message before asking WhatsApp to send it. A failed re
 
 ## Data and limits
 
-`data/app.sqlite` holds accounts and saved messages. `data/whatsmeow.sqlite` holds WhatsApp sessions. ConvoMeow creates the data directory and control token with owner-only permissions.
+`data/app.sqlite` holds accounts, messages, and private media download references. `data/whatsmeow.sqlite` holds WhatsApp sessions. Protect both databases and their backups. ConvoMeow creates the data directory and control token with owner-only permissions.
 
-The connector saves messages it receives after startup. For images, videos, audio, documents, stickers, locations, and contacts, it stores the type and any caption. It does not download attachments or import older chats.
+ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It stores metadata and private download references for images, videos, audio, documents, and stickers, but does not download the files yet. Locations and contacts include only their type.
 
-Pairing, messaging, and reconnection still need testing with a real WhatsApp number.
+Pairing, messaging, history coverage, chat aliases, and reconnection still need testing with a real WhatsApp number.
 
 The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
 

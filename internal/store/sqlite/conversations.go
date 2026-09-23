@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/notborges/convomeow/internal/core"
 )
 
@@ -23,7 +22,7 @@ func (s *Store) GetOrCreateConversation(ctx context.Context, accountID, provider
 		return core.Conversation{}, false, err
 	}
 	defer tx.Rollback()
-	conversation, created, err := ensureConversationTx(ctx, tx, accountID, providerChatID, time.Now().UTC())
+	conversation, created, err := ensureConversationTx(ctx, tx, accountID, providerChatID, nil, time.Now().UTC())
 	if err != nil {
 		return core.Conversation{}, false, err
 	}
@@ -32,22 +31,6 @@ func (s *Store) GetOrCreateConversation(ctx context.Context, accountID, provider
 	}
 	conversation, err = s.GetConversation(ctx, conversation.ID)
 	return conversation, created, err
-}
-
-func ensureConversationTx(ctx context.Context, tx *sql.Tx, accountID, providerChatID string, createdAt time.Time) (core.Conversation, bool, error) {
-	id := uuid.NewString()
-	stamp := dbTime(createdAt)
-	result, err := tx.ExecContext(ctx, `INSERT INTO conversations(id, account_id, provider_chat_id, created_at, updated_at)
-VALUES(?, ?, ?, ?, ?) ON CONFLICT(account_id, provider_chat_id) DO NOTHING`, id, accountID, providerChatID, stamp, stamp)
-	if err != nil {
-		return core.Conversation{}, false, normalizeError(err)
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		return core.Conversation{}, false, err
-	}
-	conversation, _, err := scanConversation(tx.QueryRowContext(ctx, `SELECT `+conversationColumns+` FROM conversations WHERE account_id = ? AND provider_chat_id = ?`, accountID, providerChatID))
-	return conversation, count == 1, err
 }
 
 func (s *Store) GetConversation(ctx context.Context, id string) (core.Conversation, error) {
@@ -131,6 +114,16 @@ func (s *Store) ListConversations(ctx context.Context, accountID string, before 
 		}
 		messageRows.Close()
 	}
+	lastMessages := make([]core.Message, 0, len(lastByID))
+	for _, message := range lastByID {
+		lastMessages = append(lastMessages, message)
+	}
+	if err := s.attachToMessages(ctx, lastMessages); err != nil {
+		return nil, err
+	}
+	for _, message := range lastMessages {
+		lastByID[message.ID] = message
+	}
 	for i, id := range lastIDs {
 		if last, ok := lastByID[id]; ok {
 			conversations[i].LastMessage = &last
@@ -161,10 +154,15 @@ func scanConversation(row interface{ Scan(...any) error }) (core.Conversation, s
 	return conversation, lastID.String, nil
 }
 
-func touchConversationTx(ctx context.Context, tx *sql.Tx, conversationID, messageID string, ingestedAt time.Time) error {
-	stamp := dbTime(ingestedAt)
-	_, err := tx.ExecContext(ctx, `UPDATE conversations SET updated_at = ?, last_message_id = ?
-WHERE id = ? AND (last_message_id IS NULL OR updated_at < ? OR (updated_at = ? AND last_message_id < ?))`,
-		stamp, messageID, conversationID, stamp, stamp, messageID)
+func refreshConversationTx(ctx context.Context, tx *sql.Tx, conversationID string) error {
+	var messageID, occurredAt string
+	err := tx.QueryRowContext(ctx, `SELECT public_id, occurred_at FROM messages WHERE conversation_id = ? ORDER BY occurred_at DESC, public_id DESC LIMIT 1`, conversationID).Scan(&messageID, &occurredAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `UPDATE conversations SET updated_at = ?, last_message_id = ? WHERE id = ?`, occurredAt, messageID, conversationID)
 	return err
 }

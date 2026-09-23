@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -253,5 +254,60 @@ func TestNativeAPIConversationSendAndRetry(t *testing.T) {
 		map[string]any{"kind": "text", "content": map[string]string{"text": "timeout"}}, "request-key-3"), http.StatusCreated)
 	if unknownRetry.ID != unknown.ID || connector.sends.Load() != 3 {
 		t.Fatalf("unknown send retried: %+v, sends=%d", unknownRetry, connector.sends.Load())
+	}
+}
+
+func TestHistoryMessagesUseProviderTimeAndHideMediaKeys(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "app.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	accountID := "history-account"
+	now := time.Now().UTC()
+	if err := store.CreateAccount(ctx, core.Account{ID: accountID, Provider: core.ProviderWhatsApp,
+		ConnectionKind: core.ConnectionKindLinkedDevice, Label: "history", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2025, 3, 4, 5, 6, 7, 0, time.UTC)
+	chatID := "15551112222@s.whatsapp.net"
+	newer, err := store.SaveMessage(ctx, core.Message{AccountID: accountID, ChatID: chatID, ProviderMessageID: "newer",
+		Direction: "inbound", Kind: core.MessageKindText, Text: "newer", OccurredAt: base.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ImportHistory(ctx, core.HistoryBatch{AccountID: accountID, Chat: &core.HistoryChat{ID: chatID}, Messages: []core.Message{{
+		ChatID: chatID, ProviderMessageID: "older-image", Direction: "inbound", Kind: core.MessageKindImage, OccurredAt: base,
+		Attachments: []core.Attachment{{Kind: core.MessageKindImage, MIMEType: "image/jpeg", Availability: "remote",
+			ProviderRef: []byte(`{"media_key":"private-media-secret"}`)}},
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	service := app.New(store, &fakeConnector{}, nil)
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	server := httptest.NewServer(native.New(service, "test-token"))
+	defer server.Close()
+	path := server.URL + "/api/v1/conversations/" + newer.ConversationID + "/messages?limit=1"
+	first := decode[testPage[struct {
+		ID string `json:"id"`
+	}]](t, request(t, server.Client(), http.MethodGet, path, nil, ""), http.StatusOK)
+	if len(first.Items) != 1 || first.Items[0].ID != newer.ID || first.NextCursor == "" {
+		t.Fatalf("first page: %+v", first)
+	}
+	response := request(t, server.Client(), http.MethodGet, path+"&cursor="+url.QueryEscape(first.NextCursor), nil, "")
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("second page HTTP %d", response.StatusCode)
+	}
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte("private-media-secret")) || bytes.Contains(data, []byte("provider_ref")) ||
+		bytes.Contains(data, []byte("media_key")) || !bytes.Contains(data, []byte(`"availability":"remote"`)) {
+		t.Fatalf("media metadata or key exposure: %s", data)
 	}
 }

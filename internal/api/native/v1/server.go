@@ -239,7 +239,7 @@ func writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int
 	if len(messages) > limit {
 		messages = messages[:limit]
 		last := messages[len(messages)-1]
-		next = encodeCursor(last.IngestedAt, last.ID)
+		next = encodeCursor(last.OccurredAt, last.ID)
 	}
 	items := make([]messageResponse, 0, len(messages))
 	for _, message := range messages {

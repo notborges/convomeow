@@ -59,8 +59,39 @@ type Message struct {
 	Kind              MessageKind     `json:"kind"`
 	Text              string          `json:"text,omitempty"`
 	Content           json.RawMessage `json:"content,omitempty"`
+	Attachments       []Attachment    `json:"attachments,omitempty"`
 	OccurredAt        time.Time       `json:"occurred_at"`
 	IngestedAt        time.Time       `json:"ingested_at"`
+}
+
+type Attachment struct {
+	ID           string      `json:"id"`
+	Index        int         `json:"-"`
+	Kind         MessageKind `json:"kind"`
+	MIMEType     string      `json:"mime_type,omitempty"`
+	FileName     string      `json:"file_name,omitempty"`
+	Size         uint64      `json:"size,omitempty"`
+	Availability string      `json:"availability"`
+	ProviderRef  []byte      `json:"-"`
+}
+
+type ChatLink struct {
+	First  string
+	Second string
+}
+
+type HistoryChat struct {
+	ID             string
+	Aliases        []string
+	PreferredID    string
+	LastActivityAt time.Time
+}
+
+type HistoryBatch struct {
+	AccountID string
+	Chat      *HistoryChat
+	Messages  []Message
+	Links     []ChatLink
 }
 
 type Conversation struct {
@@ -103,6 +134,7 @@ const (
 	EventLoggedOut    EventType = "logged_out"
 	EventPaired       EventType = "paired"
 	EventMessage      EventType = "message"
+	EventHistory      EventType = "history"
 	EventError        EventType = "error"
 )
 
@@ -110,6 +142,7 @@ type Event struct {
 	Type     EventType
 	Identity string
 	Message  *Message
+	History  *HistoryBatch
 	Err      error
 }
 
@@ -151,6 +184,7 @@ type Repository interface {
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	ListConversations(ctx context.Context, accountID string, before *PageCursor, limit int) ([]Conversation, error)
 	SaveMessage(ctx context.Context, message Message) (Message, error)
+	ImportHistory(ctx context.Context, batch HistoryBatch) error
 	LookupSend(ctx context.Context, actorID, key, requestHash string) (Message, bool, error)
 	ReserveSend(ctx context.Context, message Message, actorID, key, requestHash string) (Message, bool, error)
 	CompleteSend(ctx context.Context, id, state string, sent SentText) (Message, error)

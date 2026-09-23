@@ -26,6 +26,20 @@ func (s *Store) SaveMessage(ctx context.Context, m core.Message) (core.Message, 
 		return core.Message{}, err
 	}
 	defer tx.Rollback()
+	saved, err := saveMessageTx(ctx, tx, m)
+	if err != nil {
+		return core.Message{}, err
+	}
+	if err := refreshConversationTx(ctx, tx, saved.ConversationID); err != nil {
+		return core.Message{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return core.Message{}, err
+	}
+	return s.GetMessage(ctx, saved.ID)
+}
+
+func saveMessageTx(ctx context.Context, tx *sql.Tx, m core.Message) (core.Message, error) {
 	if m.Direction == "outbound" {
 		var existingID string
 		err := tx.QueryRowContext(ctx, `SELECT public_id FROM messages WHERE account_id = ? AND provider_message_id = ? AND direction = 'outbound' LIMIT 1`,
@@ -42,7 +56,7 @@ occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occur
 			if err != nil {
 				return core.Message{}, err
 			}
-			if err := tx.Commit(); err != nil {
+			if err := saveAttachmentsTx(ctx, tx, saved.ID, m.Attachments); err != nil {
 				return core.Message{}, err
 			}
 			return saved, nil
@@ -51,28 +65,28 @@ occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occur
 			return core.Message{}, err
 		}
 	}
-	conversation, _, err := ensureConversationTx(ctx, tx, m.AccountID, m.ChatID, m.IngestedAt)
-	if err != nil {
-		return core.Message{}, err
+	if m.ConversationID == "" {
+		conversation, _, err := ensureConversationTx(ctx, tx, m.AccountID, m.ChatID, nil, m.IngestedAt)
+		if err != nil {
+			return core.Message{}, err
+		}
+		m.ConversationID = conversation.ID
 	}
-	m.ConversationID = conversation.ID
-	_, err = tx.ExecContext(ctx, `INSERT INTO messages(public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at)
+	_, err := tx.ExecContext(ctx, `INSERT INTO messages(public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at)
 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(account_id, chat_id, provider_message_id) DO UPDATE SET
+ON CONFLICT(account_id, conversation_id, provider_message_id) DO UPDATE SET
 state = CASE WHEN messages.direction = 'outbound' AND messages.state IN ('queued', 'outcome_unknown') THEN 'sent' ELSE messages.state END,
-sender_id = CASE WHEN messages.sender_id = '' THEN excluded.sender_id ELSE messages.sender_id END`,
+sender_id = CASE WHEN messages.sender_id = '' THEN excluded.sender_id ELSE messages.sender_id END,
+text = CASE WHEN messages.text = '' THEN excluded.text ELSE messages.text END`,
 		m.ID, m.AccountID, m.ConversationID, m.ChatID, m.ProviderMessageID, m.Direction, m.State, m.SenderID, m.Kind, m.Text, nullableContent(m.Content), dbTime(m.OccurredAt), dbTime(m.IngestedAt))
 	if err != nil {
 		return core.Message{}, normalizeError(err)
 	}
-	saved, err := scanMessage(tx.QueryRowContext(ctx, `SELECT `+messageColumns+` FROM messages WHERE account_id = ? AND chat_id = ? AND provider_message_id = ?`, m.AccountID, m.ChatID, m.ProviderMessageID))
+	saved, err := scanMessage(tx.QueryRowContext(ctx, `SELECT `+messageColumns+` FROM messages WHERE account_id = ? AND conversation_id = ? AND provider_message_id = ?`, m.AccountID, m.ConversationID, m.ProviderMessageID))
 	if err != nil {
 		return core.Message{}, err
 	}
-	if err := touchConversationTx(ctx, tx, saved.ConversationID, saved.ID, saved.IngestedAt); err != nil {
-		return core.Message{}, err
-	}
-	if err := tx.Commit(); err != nil {
+	if err := saveAttachmentsTx(ctx, tx, saved.ID, m.Attachments); err != nil {
 		return core.Message{}, err
 	}
 	return saved, nil
@@ -162,7 +176,7 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	if _, err := tx.ExecContext(ctx, `INSERT INTO send_keys(actor_id, key, request_hash, message_id) VALUES(?, ?, ?, ?)`, actorID, key, requestHash, m.ID); err != nil {
 		return core.Message{}, false, normalizeError(err)
 	}
-	if err := touchConversationTx(ctx, tx, m.ConversationID, m.ID, m.IngestedAt); err != nil {
+	if err := refreshConversationTx(ctx, tx, m.ConversationID); err != nil {
 		return core.Message{}, false, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -191,6 +205,9 @@ WHERE public_id = ? AND state = 'queued'`, state, sent.SenderID, sent.SenderID, 
 	if err != nil {
 		return core.Message{}, err
 	}
+	if err := refreshConversationTx(ctx, tx, message.ConversationID); err != nil {
+		return core.Message{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return core.Message{}, err
 	}
@@ -198,7 +215,15 @@ WHERE public_id = ? AND state = 'queued'`, state, sent.SenderID, sent.SenderID, 
 }
 
 func (s *Store) GetMessage(ctx context.Context, id string) (core.Message, error) {
-	return scanMessage(s.db.QueryRowContext(ctx, `SELECT `+messageColumns+` FROM messages WHERE public_id = ?`, id))
+	message, err := scanMessage(s.db.QueryRowContext(ctx, `SELECT `+messageColumns+` FROM messages WHERE public_id = ?`, id))
+	if err != nil {
+		return core.Message{}, err
+	}
+	messages := []core.Message{message}
+	if err := s.attachToMessages(ctx, messages); err != nil {
+		return core.Message{}, err
+	}
+	return messages[0], nil
 }
 
 func (s *Store) ListMessages(ctx context.Context, accountID string, before *core.PageCursor, limit int) ([]core.Message, error) {
@@ -219,10 +244,10 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 	query := `SELECT ` + messageColumns + ` FROM messages WHERE ` + scope
 	args := []any{scopeID}
 	if before != nil {
-		query += ` AND (ingested_at < ? OR (ingested_at = ? AND public_id < ?))`
+		query += ` AND (occurred_at < ? OR (occurred_at = ? AND public_id < ?))`
 		args = append(args, dbTime(before.Time), dbTime(before.Time), before.ID)
 	}
-	query += ` ORDER BY ingested_at DESC, public_id DESC LIMIT ?`
+	query += ` ORDER BY occurred_at DESC, public_id DESC LIMIT ?`
 	args = append(args, limit)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -237,7 +262,16 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 		}
 		messages = append(messages, message)
 	}
-	return messages, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := s.attachToMessages(ctx, messages); err != nil {
+		return nil, err
+	}
+	return messages, nil
 }
 
 func scanMessage(row interface{ Scan(...any) error }) (core.Message, error) {

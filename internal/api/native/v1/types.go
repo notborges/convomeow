@@ -26,17 +26,27 @@ func accountFromCore(a core.AccountStatus) accountResponse {
 }
 
 type messageResponse struct {
-	ID                string    `json:"id"`
-	AccountID         string    `json:"account_id"`
-	ConversationID    string    `json:"conversation_id"`
-	ProviderMessageID string    `json:"provider_message_id,omitempty"`
-	Direction         string    `json:"direction"`
-	State             string    `json:"state"`
-	SenderID          string    `json:"sender_id,omitempty"`
-	Kind              string    `json:"kind"`
-	Content           any       `json:"content"`
-	OccurredAt        time.Time `json:"occurred_at"`
-	IngestedAt        time.Time `json:"ingested_at"`
+	ID                string               `json:"id"`
+	AccountID         string               `json:"account_id"`
+	ConversationID    string               `json:"conversation_id"`
+	ProviderMessageID string               `json:"provider_message_id,omitempty"`
+	Direction         string               `json:"direction"`
+	State             string               `json:"state"`
+	SenderID          string               `json:"sender_id,omitempty"`
+	Kind              string               `json:"kind"`
+	Content           any                  `json:"content"`
+	Attachments       []attachmentResponse `json:"attachments,omitempty"`
+	OccurredAt        time.Time            `json:"occurred_at"`
+	IngestedAt        time.Time            `json:"ingested_at"`
+}
+
+type attachmentResponse struct {
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	MIMEType     string `json:"mime_type,omitempty"`
+	FileName     string `json:"file_name,omitempty"`
+	Size         uint64 `json:"size,omitempty"`
+	Availability string `json:"availability"`
 }
 
 func messageFromCore(m core.Message) messageResponse {
@@ -46,9 +56,14 @@ func messageFromCore(m core.Message) messageResponse {
 	} else if m.Text != "" {
 		content = map[string]string{"caption": m.Text}
 	}
+	attachments := make([]attachmentResponse, 0, len(m.Attachments))
+	for _, attachment := range m.Attachments {
+		attachments = append(attachments, attachmentResponse{ID: attachment.ID, Kind: string(attachment.Kind),
+			MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
+	}
 	return messageResponse{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
-		Kind: string(m.Kind), Content: content, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
+		Kind: string(m.Kind), Content: content, Attachments: attachments, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
 }
 
 type conversationResponse struct {
