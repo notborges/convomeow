@@ -177,35 +177,35 @@ func (s *session) Login(ctx context.Context, onChallenge func(core.LoginChalleng
 	}
 }
 
-func (s *session) PrepareText(recipient string) (core.PreparedText, error) {
+func (s *session) PrepareMessage(recipient string) (core.PreparedMessage, error) {
 	jid, err := recipientJID(recipient)
 	if err != nil {
-		return core.PreparedText{}, err
+		return core.PreparedMessage{}, err
 	}
-	prepared := core.PreparedText{ChatID: jid.String(), ProviderMessageID: string(s.client.GenerateMessageID())}
+	prepared := core.PreparedMessage{ChatID: jid.String(), ProviderMessageID: string(s.client.GenerateMessageID())}
 	if s.client.Store != nil && s.client.Store.ID != nil {
 		prepared.SenderID = s.client.Store.ID.ToNonAD().String()
 	}
 	return prepared, nil
 }
 
-func (s *session) SendText(ctx context.Context, prepared core.PreparedText, text string) (core.SentText, error) {
+func (s *session) SendText(ctx context.Context, prepared core.PreparedMessage, text string) (core.SentMessage, error) {
 	jid, err := recipientJID(prepared.ChatID)
 	if err != nil {
-		return core.SentText{}, err
+		return core.SentMessage{}, err
 	}
 	if prepared.ProviderMessageID == "" {
-		return core.SentText{}, fmt.Errorf("%w: missing provider message ID", core.ErrInvalid)
+		return core.SentMessage{}, fmt.Errorf("%w: missing provider message ID", core.ErrInvalid)
 	}
 	response, err := s.client.SendMessage(ctx, jid, &waE2E.Message{Conversation: proto.String(text)}, whatsmeow.SendRequestExtra{ID: types.MessageID(prepared.ProviderMessageID)})
 	if err != nil {
-		return core.SentText{}, err
+		return core.SentMessage{}, err
 	}
 	chat := response.Chat
 	if chat.IsEmpty() {
 		chat = jid
 	}
-	sent := core.SentText{ChatID: chat.String(), ProviderMessageID: string(response.ID), SenderID: prepared.SenderID, Timestamp: response.Timestamp}
+	sent := core.SentMessage{ChatID: chat.String(), ProviderMessageID: string(response.ID), SenderID: prepared.SenderID, Timestamp: response.Timestamp}
 	return sent, nil
 }
 

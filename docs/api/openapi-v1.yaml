@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     The v1 API covers WhatsApp linked-device accounts, pairing, conversations,
-    text messages, and received media.
+    text and media messages, and stored media.
 security:
   - bearerToken: []
 paths:
@@ -132,6 +132,67 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/uploads:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: createUpload
+      summary: Store one file for a media message
+      description: Unused uploads expire after 24 hours and can be sent once.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: File stored.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upload'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          description: Media storage or staging space is unavailable.
+        '507':
+          description: Media storage quota is full.
+  /api/v1/accounts/{id}/uploads/{upload_id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - name: upload_id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: deleteUpload
+      summary: Delete an unused upload
+      responses:
+        '204':
+          description: Upload marked for deletion.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/accounts/{id}/login-attempts/{attempt_id}:
     parameters:
       - $ref: '#/components/parameters/AccountID'
@@ -262,8 +323,8 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
     post:
-      operationId: sendTextMessage
-      summary: Send a text message
+      operationId: sendMessage
+      summary: Send text or stored media
       description: >-
         ConvoMeow stores a send record before calling the provider. A provider error
         can leave the record in outcome_unknown; inspect the message before retrying.
@@ -282,18 +343,34 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SendText'
+              oneOf:
+                - $ref: '#/components/schemas/SendText'
+                - $ref: '#/components/schemas/SendMedia'
             example:
               kind: text
               content:
                 text: Hello
       responses:
         '201':
-          description: Send record created or returned for a repeated key.
+          description: Text send record created or returned for a repeated key.
           headers:
             Location:
               schema:
                 type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '202':
+          description: Media send queued or returned for a repeated key. Poll Location for its state.
+          headers:
+            Location:
+              schema:
+                type: string
+            Retry-After:
+              schema:
+                type: integer
+              description: Suggested poll interval in seconds.
           content:
             application/json:
               schema:
@@ -310,8 +387,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/Unsupported'
   /api/v1/messages:
     get:
       operationId: listAccountMessages
@@ -504,20 +579,14 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
-    Unsupported:
-      description: Message kind is not supported for sending.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/Problem'
     TooLarge:
-      description: JSON body exceeds 1 MiB.
+      description: Request exceeds its size limit.
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
     UnsupportedMediaType:
-      description: Request body is not application/json.
+      description: Request body has an unsupported media type.
       content:
         application/problem+json:
           schema:
@@ -675,6 +744,45 @@ components:
               type: string
               minLength: 1
               description: 1-4096 UTF-8 bytes after trimming surrounding whitespace.
+    SendMedia:
+      type: object
+      additionalProperties: false
+      required: [kind, content]
+      description: Images accept JPEG, PNG, or WebP; videos accept MP4 or 3GPP; audio accepts MP3, MP4, Ogg, AAC, or AMR. Documents accept any valid MIME type. Stickers require static WebP.
+      properties:
+        kind:
+          type: string
+          enum: [image, video, audio, document, sticker]
+        content:
+          type: object
+          additionalProperties: false
+          required: [upload_id]
+          properties:
+            upload_id:
+              type: string
+              description: ID of a ready upload owned by the conversation's account.
+            caption:
+              type: string
+              description: Up to 1024 UTF-8 bytes. Accepted for images, videos, and documents only.
+    Upload:
+      type: object
+      required: [id, account_id, mime_type, file_name, size, expires_at]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        mime_type:
+          type: string
+        file_name:
+          type: string
+        size:
+          type: integer
+          format: int64
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
     Message:
       type: object
       required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]

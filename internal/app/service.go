@@ -58,7 +58,9 @@ func NewWithMedia(repo core.Repository, connector core.Connector, logger *slog.L
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{repo: repo, connector: connector, logger: logger, accounts: make(map[string]*runtimeAccount), ctx: ctx, cancel: cancel}
 	if options.Stores != nil {
-		s.media = mediaState{options: options, queue: make(chan string, max(options.Workers, 1)*4), wake: make(chan struct{}, 1), inflight: make(map[string]bool)}
+		s.media = mediaState{options: options, queue: make(chan string, max(options.Workers, 1)*4),
+			sendQueue: make(chan string, max(options.Workers, 1)*4), wake: make(chan struct{}, 1),
+			inflight: make(map[string]bool), sendInflight: make(map[string]bool)}
 	}
 	return s
 }
@@ -323,13 +325,8 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	if text == "" || len(text) > 4096 {
 		return core.Message{}, fmt.Errorf("%w: text must be 1-4096 bytes", core.ErrInvalid)
 	}
-	if len(key) < 8 || len(key) > 128 {
-		return core.Message{}, fmt.Errorf("%w: Idempotency-Key must be 8-128 characters", core.ErrInvalid)
-	}
-	for _, char := range key {
-		if char < 33 || char > 126 {
-			return core.Message{}, fmt.Errorf("%w: Idempotency-Key must contain printable ASCII without spaces", core.ErrInvalid)
-		}
+	if err := validateSendKey(key); err != nil {
+		return core.Message{}, err
 	}
 	conversation, err := s.repo.GetConversation(ctx, conversationID)
 	if err != nil {
@@ -351,7 +348,7 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	if state != "connected" || session == nil {
 		return core.Message{}, core.ErrNotConnected
 	}
-	prepared, err := session.PrepareText(conversation.ProviderChatID)
+	prepared, err := session.PrepareMessage(conversation.ProviderChatID)
 	if err != nil {
 		return core.Message{}, err
 	}
@@ -526,6 +523,9 @@ func (s *Service) onEvent(id string, event core.Event) {
 			rt.lastError = event.Err.Error()
 		}
 		rt.mu.Unlock()
+		if err := s.repo.FailMediaSendsForAccount(ctx, id); err != nil {
+			s.logger.Error("fail pending media sends after logout", "account_id", id, "error", err)
+		}
 	case core.EventError:
 		if event.Err != nil {
 			rt.setError(event.Err)

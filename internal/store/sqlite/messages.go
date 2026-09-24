@@ -59,6 +59,9 @@ occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occur
 			if err := saveAttachmentsTx(ctx, tx, saved.ID, m.Attachments); err != nil {
 				return core.Message{}, err
 			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM outgoing_media_jobs WHERE message_id = ?`, saved.ID); err != nil {
+				return core.Message{}, err
+			}
 			return saved, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
@@ -185,7 +188,7 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	return m, true, nil
 }
 
-func (s *Store) CompleteSend(ctx context.Context, id, state string, sent core.SentText) (core.Message, error) {
+func (s *Store) CompleteSend(ctx context.Context, id, state string, sent core.SentMessage) (core.Message, error) {
 	if state != "sent" && state != "failed" && state != "outcome_unknown" {
 		return core.Message{}, core.ErrInvalid
 	}

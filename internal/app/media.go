@@ -28,9 +28,11 @@ type MediaOptions struct {
 type mediaState struct {
 	options        MediaOptions
 	queue          chan string
+	sendQueue      chan string
 	wake           chan struct{}
 	mu             sync.Mutex
 	inflight       map[string]bool
+	sendInflight   map[string]bool
 	reservedTemp   int64
 	reservedStored int64
 }
@@ -52,9 +54,9 @@ func (s *Service) startMediaWorkers() error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".download-") {
+		if !entry.IsDir() && (strings.HasPrefix(entry.Name(), ".download-") || strings.HasPrefix(entry.Name(), ".upload-") || strings.HasPrefix(entry.Name(), ".encrypt-")) {
 			if err := os.Remove(filepath.Join(s.media.options.TempDir, entry.Name())); err != nil {
-				return fmt.Errorf("remove abandoned media download: %w", err)
+				return fmt.Errorf("remove abandoned media staging file: %w", err)
 			}
 		}
 	}
@@ -63,6 +65,13 @@ func (s *Service) startMediaWorkers() error {
 		go func() {
 			defer s.workWG.Done()
 			s.mediaWorker()
+		}()
+	}
+	for i := 0; i < s.media.options.Workers; i++ {
+		s.workWG.Add(1)
+		go func() {
+			defer s.workWG.Done()
+			s.mediaSendWorker()
 		}()
 	}
 	s.workWG.Add(1)
@@ -109,6 +118,8 @@ func (s *Service) scanMedia() {
 			break
 		}
 	}
+	s.scanMediaSends(ctx)
+	s.cleanUploads(ctx)
 	s.cleanMediaOrphans(ctx)
 }
 

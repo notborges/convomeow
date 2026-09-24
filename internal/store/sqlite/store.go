@@ -45,11 +45,32 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE messages SET state = 'outcome_unknown' WHERE state = 'queued'`); err != nil {
+	if err := s.recoverSends(ctx); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+func (s *Store) recoverSends(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE messages SET state = 'outcome_unknown' WHERE state = 'queued' AND (
+NOT EXISTS (SELECT 1 FROM outgoing_media_jobs j WHERE j.message_id = messages.public_id) OR
+EXISTS (SELECT 1 FROM outgoing_media_jobs j WHERE j.message_id = messages.public_id AND j.phase = 'sending'))`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM outgoing_media_jobs WHERE phase = 'sending' OR
+EXISTS (SELECT 1 FROM messages m WHERE m.public_id = outgoing_media_jobs.message_id AND m.state != 'queued')`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE outgoing_media_jobs SET phase = 'queued' WHERE phase = 'uploading'`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) Close() error { return s.db.Close() }

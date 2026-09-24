@@ -23,6 +23,8 @@ func New(service *app.Service, token string) http.Handler {
 	register(mux, "/api/v1/accounts/{id}/login-attempts", map[string]http.HandlerFunc{"POST": s.startLogin})
 	register(mux, "/api/v1/accounts/{id}/login-attempts/{attempt_id}", map[string]http.HandlerFunc{"GET": s.getLogin})
 	register(mux, "/api/v1/accounts/{id}/conversations", map[string]http.HandlerFunc{"POST": s.createConversation})
+	register(mux, "/api/v1/accounts/{id}/uploads", map[string]http.HandlerFunc{"POST": s.createUpload})
+	register(mux, "/api/v1/accounts/{id}/uploads/{upload_id}", map[string]http.HandlerFunc{"DELETE": s.deleteUpload})
 	register(mux, "/api/v1/conversations", map[string]http.HandlerFunc{"GET": s.listConversations})
 	register(mux, "/api/v1/conversations/{id}", map[string]http.HandlerFunc{"GET": s.getConversation})
 	register(mux, "/api/v1/conversations/{id}/messages", map[string]http.HandlerFunc{"GET": s.listConversationMessages, "POST": s.sendMessage})
@@ -183,7 +185,9 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Kind    string `json:"kind"`
 		Content struct {
-			Text string `json:"text"`
+			Text     string `json:"text"`
+			UploadID string `json:"upload_id"`
+			Caption  string `json:"caption"`
 		} `json:"content"`
 	}
 	if !decodeRequest(w, r, &body) {
@@ -193,20 +197,35 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusBadRequest, "invalid_input", "kind is required.")
 		return
 	}
-	if body.Kind != "text" {
-		writeProblem(w, r, http.StatusUnprocessableEntity, "unsupported_capability", "Only text sending is available.")
-		return
-	}
 	key := r.Header.Get("Idempotency-Key")
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	message, err := s.service.SendText(ctx, r.PathValue("id"), body.Content.Text, key)
+	var message core.Message
+	var err error
+	status := http.StatusCreated
+	if body.Kind == "text" {
+		if body.Content.UploadID != "" || body.Content.Caption != "" {
+			writeProblem(w, r, http.StatusBadRequest, "invalid_input", "Text messages accept only content.text.")
+			return
+		}
+		message, err = s.service.SendText(ctx, r.PathValue("id"), body.Content.Text, key)
+	} else {
+		if body.Content.Text != "" || body.Content.UploadID == "" {
+			writeProblem(w, r, http.StatusBadRequest, "invalid_input", "Media messages require content.upload_id.")
+			return
+		}
+		message, err = s.service.SendMedia(ctx, r.PathValue("id"), core.MessageKind(body.Kind), body.Content.UploadID, body.Content.Caption, key)
+		status = http.StatusAccepted
+	}
 	if err != nil {
 		respondError(w, r, err)
 		return
 	}
 	w.Header().Set("Location", "/api/v1/messages/"+message.ID)
-	writeJSON(w, http.StatusCreated, messageFromCore(message))
+	if status == http.StatusAccepted {
+		w.Header().Set("Retry-After", "2")
+	}
+	writeJSON(w, status, messageFromCore(message))
 }
 
 func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {

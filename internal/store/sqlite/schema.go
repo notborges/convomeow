@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 func (s *Store) initSchema(ctx context.Context) error {
 	var version int
@@ -120,11 +120,32 @@ CREATE TABLE send_keys (
   message_id TEXT NOT NULL REFERENCES messages(public_id),
   PRIMARY KEY(actor_id, key)
 );
+CREATE TABLE uploads (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  profile_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  sha256 BLOB NOT NULL,
+  state TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX uploads_cleanup ON uploads(state, expires_at, created_at);
+CREATE TABLE outgoing_media_jobs (
+  message_id TEXT PRIMARY KEY REFERENCES messages(public_id),
+  phase TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT
+);
+CREATE INDEX outgoing_media_pending ON outgoing_media_jobs(phase, next_attempt_at);
 `
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 6`); err != nil {
+	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 7`); err != nil {
 		return err
 	}
 	return tx.Commit()

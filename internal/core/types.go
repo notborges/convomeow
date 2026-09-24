@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"time"
 )
@@ -34,7 +35,7 @@ var (
 	ErrMediaTooLarge    = errors.New("media exceeds the configured size limit")
 	ErrMediaQuota       = errors.New("media storage limit reached")
 	ErrMediaStorage     = errors.New("media storage is unavailable")
-	ErrMediaBusy        = errors.New("media download queue is full")
+	ErrMediaBusy        = errors.New("media queue is full")
 )
 
 type Account struct {
@@ -183,14 +184,14 @@ type Event struct {
 	Err      error
 }
 
-type SentText struct {
+type SentMessage struct {
 	ChatID            string
 	ProviderMessageID string
 	SenderID          string
 	Timestamp         time.Time
 }
 
-type PreparedText struct {
+type PreparedMessage struct {
 	ChatID            string
 	ProviderMessageID string
 	SenderID          string
@@ -199,8 +200,10 @@ type PreparedText struct {
 type Session interface {
 	Connect() error
 	Login(ctx context.Context, onChallenge func(LoginChallenge)) error
-	PrepareText(recipient string) (PreparedText, error)
-	SendText(ctx context.Context, prepared PreparedText, text string) (SentText, error)
+	PrepareMessage(recipient string) (PreparedMessage, error)
+	SendText(ctx context.Context, prepared PreparedMessage, text string) (SentMessage, error)
+	UploadMedia(ctx context.Context, kind MessageKind, data io.Reader, scratch *os.File) (UploadedMedia, error)
+	SendMedia(ctx context.Context, prepared PreparedMessage, media OutgoingMedia, uploaded UploadedMedia) (SentMessage, error)
 	DownloadMedia(ctx context.Context, source MediaSource, file *os.File, maxBytes int64) ([]byte, error)
 	Identity() string
 	Close()
@@ -225,7 +228,19 @@ type Repository interface {
 	ImportHistory(ctx context.Context, batch HistoryBatch) error
 	LookupSend(ctx context.Context, actorID, key, requestHash string) (Message, bool, error)
 	ReserveSend(ctx context.Context, message Message, actorID, key, requestHash string) (Message, bool, error)
-	CompleteSend(ctx context.Context, id, state string, sent SentText) (Message, error)
+	ReserveMediaSend(ctx context.Context, message Message, actorID, key, requestHash, uploadID string) (Message, bool, error)
+	CompleteSend(ctx context.Context, id, state string, sent SentMessage) (Message, error)
+	CreateUpload(ctx context.Context, upload Upload) error
+	MarkUploadReady(ctx context.Context, id string) error
+	MarkUploadDeleting(ctx context.Context, accountID, id string) error
+	ListUploadsForCleanup(ctx context.Context, now time.Time, limit int) ([]Upload, error)
+	ClearUpload(ctx context.Context, id string) error
+	ListPendingMediaSends(ctx context.Context, now time.Time, limit int) ([]string, error)
+	ClaimMediaSend(ctx context.Context, id string) (OutgoingMediaJob, error)
+	RetryMediaSend(ctx context.Context, id string, next time.Time, attempts int) error
+	BeginMediaSend(ctx context.Context, id string) error
+	CompleteMediaSend(ctx context.Context, id, state string, sent SentMessage) error
+	FailMediaSendsForAccount(ctx context.Context, accountID string) error
 	GetMessage(ctx context.Context, id string) (Message, error)
 	ListMessages(ctx context.Context, accountID string, before *PageCursor, limit int) ([]Message, error)
 	ListConversationMessages(ctx context.Context, conversationID string, before *PageCursor, limit int) ([]Message, error)
@@ -247,4 +262,49 @@ type Repository interface {
 type MediaObject struct {
 	ProfileID string
 	Key       string
+}
+
+type Upload struct {
+	ID        string
+	AccountID string
+	ProfileID string
+	ObjectKey string
+	MIMEType  string
+	FileName  string
+	Size      int64
+	SHA256    []byte
+	State     string
+	ExpiresAt time.Time
+}
+
+type OutgoingMediaJob struct {
+	MessageID         string
+	AccountID         string
+	ChatID            string
+	ProviderMessageID string
+	SenderID          string
+	Kind              MessageKind
+	Caption           string
+	AttachmentID      string
+	ProfileID         string
+	ObjectKey         string
+	MIMEType          string
+	FileName          string
+	Size              int64
+	SHA256            []byte
+	Attempts          int
+}
+
+type UploadedMedia interface {
+	Size() int64
+	SHA256() []byte
+}
+
+type OutgoingMedia struct {
+	Kind     MessageKind
+	MIMEType string
+	FileName string
+	Caption  string
+	Width    uint32
+	Height   uint32
 }

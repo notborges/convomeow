@@ -79,6 +79,10 @@ func (c *Client) do(ctx context.Context, method, path string, body, dst any, key
 		return err
 	}
 	defer resp.Body.Close()
+	return decodeResponse(resp, dst)
+}
+
+func decodeResponse(resp *http.Response, dst any) error {
 	if resp.StatusCode >= 400 {
 		var payload struct {
 			Code   string `json:"code"`
@@ -286,6 +290,8 @@ func (c *Client) message(ctx context.Context, args []string) error {
 		}
 		fmt.Printf("Message %s: %s\n", sent.ID, sent.State)
 		return nil
+	case "send-file":
+		return c.sendFile(ctx, args[1:])
 	case "list":
 		if len(args) != 2 {
 			return usage()
@@ -402,5 +408,5 @@ func renderQR(w io.Writer, data string) error {
 }
 
 func usage() error {
-	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message list ACCOUNT")
+	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message send-file [--key KEY] [--caption TEXT] [--upload-id ID] ACCOUNT PHONE_OR_CONVERSATION_ID KIND [FILE] | message list ACCOUNT")
 }

@@ -62,7 +62,9 @@ AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY id LIMIT ?`, dbTi
 
 func (s *Store) StoredMediaBytes(ctx context.Context) (int64, error) {
 	var total int64
-	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(stored_size), 0) FROM attachments WHERE availability = 'ready'`).Scan(&total)
+	err := s.db.QueryRowContext(ctx, `SELECT
+(SELECT COALESCE(SUM(stored_size), 0) FROM attachments WHERE availability = 'ready') +
+(SELECT COALESCE(SUM(size), 0) FROM uploads)`).Scan(&total)
 	return total, err
 }
 

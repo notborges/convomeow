@@ -123,7 +123,7 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, core.ErrMediaQuota):
 		writeProblem(w, r, http.StatusInsufficientStorage, "media_quota", "Media storage limit reached.")
 	case errors.Is(err, core.ErrMediaBusy):
-		writeProblem(w, r, http.StatusServiceUnavailable, "media_busy", "Media download queue is full. Retry shortly.")
+		writeProblem(w, r, http.StatusServiceUnavailable, "media_busy", "Media is busy. Retry shortly.")
 	case errors.Is(err, core.ErrMediaStorage):
 		writeProblem(w, r, http.StatusServiceUnavailable, "media_storage_unavailable", "Media storage is unavailable.")
 	default:

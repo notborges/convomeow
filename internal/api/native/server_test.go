@@ -3,6 +3,7 @@ package native_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,12 +24,16 @@ import (
 )
 
 type fakeConnector struct {
-	nextID         atomic.Int64
-	sends          atomic.Int64
-	failSend       atomic.Bool
-	mediaPayload   []byte
-	mediaGate      chan struct{}
-	mediaDownloads atomic.Int64
+	nextID          atomic.Int64
+	sends           atomic.Int64
+	failSend        atomic.Bool
+	mediaPayload    []byte
+	mediaGate       chan struct{}
+	mediaDownloads  atomic.Int64
+	mediaUploads    atomic.Int64
+	mediaSends      atomic.Int64
+	failMediaUpload atomic.Bool
+	failMediaSend   atomic.Bool
 }
 
 func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, error) {
@@ -64,16 +69,45 @@ func (s *fakeSession) Login(_ context.Context, _ func(core.LoginChallenge)) erro
 	return nil
 }
 
-func (s *fakeSession) PrepareText(recipient string) (core.PreparedText, error) {
-	return core.PreparedText{ChatID: recipient, ProviderMessageID: fmt.Sprintf("prepared-%d", s.connector.nextID.Add(1))}, nil
+func (s *fakeSession) PrepareMessage(recipient string) (core.PreparedMessage, error) {
+	return core.PreparedMessage{ChatID: recipient, ProviderMessageID: fmt.Sprintf("prepared-%d", s.connector.nextID.Add(1))}, nil
 }
 
-func (s *fakeSession) SendText(_ context.Context, prepared core.PreparedText, _ string) (core.SentText, error) {
+func (s *fakeSession) SendText(_ context.Context, prepared core.PreparedMessage, _ string) (core.SentMessage, error) {
 	s.connector.sends.Add(1)
 	if s.connector.failSend.Load() {
-		return core.SentText{}, errors.New("simulated provider timeout")
+		return core.SentMessage{}, errors.New("simulated provider timeout")
 	}
-	return core.SentText{ChatID: prepared.ChatID, ProviderMessageID: prepared.ProviderMessageID, Timestamp: time.Now().UTC()}, nil
+	return core.SentMessage{ChatID: prepared.ChatID, ProviderMessageID: prepared.ProviderMessageID, Timestamp: time.Now().UTC()}, nil
+}
+
+func (s *fakeSession) UploadMedia(_ context.Context, _ core.MessageKind, data io.Reader, _ *os.File) (core.UploadedMedia, error) {
+	s.connector.mediaUploads.Add(1)
+	if s.connector.failMediaUpload.Load() {
+		return nil, errors.New("simulated media upload failure")
+	}
+	content, err := io.ReadAll(data)
+	if err != nil {
+		return nil, err
+	}
+	hash := sha256.Sum256(content)
+	return fakeUploadedMedia{size: int64(len(content)), hash: hash[:]}, nil
+}
+
+type fakeUploadedMedia struct {
+	size int64
+	hash []byte
+}
+
+func (u fakeUploadedMedia) Size() int64    { return u.size }
+func (u fakeUploadedMedia) SHA256() []byte { return u.hash }
+
+func (s *fakeSession) SendMedia(_ context.Context, prepared core.PreparedMessage, _ core.OutgoingMedia, _ core.UploadedMedia) (core.SentMessage, error) {
+	s.connector.mediaSends.Add(1)
+	if s.connector.failMediaSend.Load() {
+		return core.SentMessage{}, errors.New("simulated media send timeout")
+	}
+	return core.SentMessage{ChatID: prepared.ChatID, ProviderMessageID: prepared.ProviderMessageID, Timestamp: time.Now().UTC()}, nil
 }
 
 func (s *fakeSession) DownloadMedia(ctx context.Context, _ core.MediaSource, file *os.File, maxBytes int64) ([]byte, error) {

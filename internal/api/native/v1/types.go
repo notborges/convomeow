@@ -22,7 +22,7 @@ type accountResponse struct {
 func accountFromCore(a core.AccountStatus) accountResponse {
 	return accountResponse{ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
-		Capabilities: []string{"read_messages", "read_media", "send_text", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+		Capabilities: []string{"read_messages", "read_media", "send_text", "send_media", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 type messageResponse struct {
