@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     The v1 API covers WhatsApp linked-device accounts, pairing, conversations,
-    and text messages.
+    text messages, and received media.
 security:
   - bearerToken: []
 paths:
@@ -250,7 +250,7 @@ paths:
         - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: Newest WhatsApp message timestamps first. History may arrive after newer messages.
+          description: Newest provider message timestamps first. History may arrive after newer messages.
           content:
             application/json:
               schema:
@@ -265,7 +265,7 @@ paths:
       operationId: sendTextMessage
       summary: Send a text message
       description: >-
-        ConvoMeow stores a send record before calling WhatsApp. A provider error
+        ConvoMeow stores a send record before calling the provider. A provider error
         can leave the record in outcome_unknown; inspect the message before retrying.
         Reuse the same Idempotency-Key to retrieve the same send record.
       parameters:
@@ -326,7 +326,7 @@ paths:
         - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
-          description: Newest WhatsApp message timestamps first. History may arrive after newer messages.
+          description: Newest provider message timestamps first. History may arrive after newer messages.
           content:
             application/json:
               schema:
@@ -358,6 +358,86 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/attachments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentID'
+    get:
+      operationId: getAttachment
+      summary: Read attachment metadata
+      responses:
+        '200':
+          description: Current attachment metadata and availability.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/attachments/{id}/content:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentID'
+    get:
+      operationId: getAttachmentContent
+      summary: Download an attachment
+      description: A remote file starts a background download. Poll this route after a 202 response.
+      parameters:
+        - name: Range
+          in: header
+          schema:
+            type: string
+          description: One byte range, such as bytes=0-1023.
+      responses:
+        '200':
+          description: Full file from the configured storage profile.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Requested byte range.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '202':
+          description: Download pending. Retry-After gives a poll interval in seconds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attachment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: Attachment content is unavailable.
+        '413':
+          description: Media exceeds the configured file limit.
+        '416':
+          description: Invalid or unsatisfiable byte range.
+        '503':
+          description: Storage is unavailable or the download queue is full.
+        '507':
+          description: Configured media storage limit reached.
+    head:
+      operationId: headAttachmentContent
+      summary: Check a stored attachment
+      description: Returns the same status and content headers as GET without starting a download or sending a body.
+      responses:
+        '200':
+          description: Stored file is ready.
+        '206':
+          description: Stored byte range is ready.
+        '202':
+          description: File is remote; no download was started.
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     bearerToken:
@@ -374,6 +454,12 @@ components:
       schema:
         type: string
     ConversationID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    AttachmentID:
       name: id
       in: path
       required: true
@@ -559,7 +645,7 @@ components:
         updated_at:
           type: string
           format: date-time
-          description: Most recent saved message timestamp, or WhatsApp's conversation timestamp if no supported message was imported.
+          description: Most recent saved message timestamp, or the provider's conversation timestamp if no supported message was imported.
         last_message:
           $ref: '#/components/schemas/Message'
     ConversationPage:
@@ -621,13 +707,13 @@ components:
               type: string
         attachments:
           type: array
-          description: Attachment metadata. File downloads are not available yet.
+          description: Attachment metadata. Fetch content through the attachment content route.
           items:
             $ref: '#/components/schemas/Attachment'
         occurred_at:
           type: string
           format: date-time
-          description: Timestamp supplied by WhatsApp. Message pages use this timestamp and ID for ordering.
+          description: Timestamp supplied by the provider. Message pages use this timestamp and ID for ordering.
         ingested_at:
           type: string
           format: date-time
@@ -651,8 +737,8 @@ components:
           minimum: 0
         availability:
           type: string
-          enum: [remote, unavailable]
-          description: Remote media has a private WhatsApp reference; files cannot be downloaded through the API yet.
+          enum: [remote, ready, unavailable]
+          description: Remote media can be requested; ready media is stored; unavailable media cannot be recovered.
     MessagePage:
       type: object
       required: [items]

@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 func (s *Store) initSchema(ctx context.Context) error {
 	var version int
@@ -94,9 +94,25 @@ CREATE TABLE attachments (
   size INTEGER NOT NULL DEFAULT 0,
   availability TEXT NOT NULL,
   provider_ref BLOB,
+  auto_fetch INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  failure_code TEXT NOT NULL DEFAULT '',
+  required_bytes INTEGER NOT NULL DEFAULT 0,
+  storage_profile_id TEXT,
+  object_key TEXT,
+  stored_size INTEGER,
+  stored_sha256 BLOB,
+  media_version INTEGER NOT NULL DEFAULT 0,
   UNIQUE(message_id, part_index)
 );
 CREATE INDEX attachments_message ON attachments(message_id, part_index);
+CREATE INDEX attachments_pending ON attachments(auto_fetch, availability, next_attempt_at);
+CREATE TABLE media_orphans (
+  profile_id TEXT NOT NULL,
+  object_key TEXT NOT NULL,
+  PRIMARY KEY(profile_id, object_key)
+);
 CREATE TABLE send_keys (
   actor_id TEXT NOT NULL,
   key TEXT NOT NULL,
@@ -108,7 +124,7 @@ CREATE TABLE send_keys (
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 5`); err != nil {
+	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 6`); err != nil {
 		return err
 	}
 	return tx.Commit()

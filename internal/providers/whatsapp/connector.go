@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -70,11 +71,13 @@ type session struct {
 	historyMu     sync.Mutex
 	historyWG     sync.WaitGroup
 	historyClosed bool
+	retryMu       sync.Mutex
+	retryWaiters  map[types.MessageID]chan *events.MediaRetry
 }
 
 func newSession(device *store.Device, emit func(core.Event)) core.Session {
 	client := whatsmeow.NewClient(device, nil)
-	s := &session{client: client, emit: emit, history: make(chan *events.HistorySync, 2)}
+	s := &session{client: client, emit: emit, history: make(chan *events.HistorySync, 2), retryWaiters: make(map[types.MessageID]chan *events.MediaRetry)}
 	s.historyWG.Add(1)
 	go func() {
 		defer s.historyWG.Done()
@@ -98,6 +101,7 @@ func (s *session) Connect() error { return s.client.Connect() }
 func (s *session) Close() {
 	s.client.Disconnect()
 	s.closeHistoryQueue()
+	s.closeRetryWaiters()
 	s.historyWG.Wait()
 }
 
@@ -119,8 +123,20 @@ func (s *session) handleEvent(evt any) {
 		s.historyMu.Unlock()
 		return
 	}
+	if retry, ok := evt.(*events.MediaRetry); ok {
+		s.retryMu.Lock()
+		if waiter := s.retryWaiters[retry.MessageID]; waiter != nil {
+			select {
+			case waiter <- retry:
+			default:
+			}
+		}
+		s.retryMu.Unlock()
+		return
+	}
 	if _, ok := evt.(*events.LoggedOut); ok {
 		s.closeHistoryQueue()
+		s.closeRetryWaiters()
 		s.historyWG.Wait()
 	}
 	translateEvent(s.emit, evt)
@@ -191,6 +207,10 @@ func (s *session) SendText(ctx context.Context, prepared core.PreparedText, text
 	}
 	sent := core.SentText{ChatID: chat.String(), ProviderMessageID: string(response.ID), SenderID: prepared.SenderID, Timestamp: response.Timestamp}
 	return sent, nil
+}
+
+func (s *session) DownloadMedia(ctx context.Context, source core.MediaSource, file *os.File, maxBytes int64) ([]byte, error) {
+	return s.downloadMedia(ctx, source, file, maxBytes)
 }
 
 func recipientJID(recipient string) (types.JID, error) {

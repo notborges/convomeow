@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -22,9 +23,12 @@ import (
 )
 
 type fakeConnector struct {
-	nextID   atomic.Int64
-	sends    atomic.Int64
-	failSend atomic.Bool
+	nextID         atomic.Int64
+	sends          atomic.Int64
+	failSend       atomic.Bool
+	mediaPayload   []byte
+	mediaGate      chan struct{}
+	mediaDownloads atomic.Int64
 }
 
 func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, error) {
@@ -70,6 +74,25 @@ func (s *fakeSession) SendText(_ context.Context, prepared core.PreparedText, _ 
 		return core.SentText{}, errors.New("simulated provider timeout")
 	}
 	return core.SentText{ChatID: prepared.ChatID, ProviderMessageID: prepared.ProviderMessageID, Timestamp: time.Now().UTC()}, nil
+}
+
+func (s *fakeSession) DownloadMedia(ctx context.Context, _ core.MediaSource, file *os.File, maxBytes int64) ([]byte, error) {
+	s.connector.mediaDownloads.Add(1)
+	if s.connector.mediaGate != nil {
+		select {
+		case <-s.connector.mediaGate:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if s.connector.mediaPayload == nil {
+		return nil, core.ErrMediaUnavailable
+	}
+	if int64(len(s.connector.mediaPayload)) > maxBytes {
+		return nil, core.ErrMediaTooLarge
+	}
+	_, err := file.Write(s.connector.mediaPayload)
+	return nil, err
 }
 
 func (s *fakeSession) Identity() string { return "test-device" }

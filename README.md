@@ -23,7 +23,7 @@ In another terminal:
 ./convomeow message list sales
 ```
 
-The daemon listens on `127.0.0.1:8787` and writes to `./data`. Put `--data-dir DIR` before the command to change its data directory. You can set these variables:
+The daemon listens on `127.0.0.1:8787` and writes to `./data`. Put `--data-dir DIR` before the command to change its data directory. Put `--config FILE` before `serve` to load a different configuration file. You can set these variables:
 
 | Variable | Purpose |
 | --- | --- |
@@ -50,6 +50,8 @@ On first start, the daemon creates `data/control.token`. Send its value as `Auth
 | `GET` | `/api/v1/conversations`, `/api/v1/conversations/{id}` | List and read conversations |
 | `GET`, `POST` | `/api/v1/conversations/{id}/messages` | Read a thread or send text |
 | `GET` | `/api/v1/messages`, `/api/v1/messages/{id}` | Read an account's messages or one message |
+| `GET` | `/api/v1/attachments/{id}` | Read attachment metadata and availability |
+| `GET`, `HEAD` | `/api/v1/attachments/{id}/content` | Download stored media or request a remote file |
 
 Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. Send to its ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
 
@@ -61,11 +63,13 @@ The API saves an outgoing message before asking WhatsApp to send it. A failed re
 
 ## Data and limits
 
-`data/app.sqlite` holds accounts, messages, and private media download references. `data/whatsmeow.sqlite` holds WhatsApp sessions. Protect both databases and their backups. ConvoMeow creates the data directory and control token with owner-only permissions.
+`data/app.sqlite` holds accounts, messages, and private media download references. `data/whatsmeow.sqlite` holds WhatsApp sessions. Protect both databases, stored media, and their backups. ConvoMeow creates the data directory, control token, and local media files with owner-only permissions.
 
-ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It stores metadata and private download references for images, videos, audio, documents, and stickers, but does not download the files yet. Locations and contacts include only their type.
+ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It attempts to download new images, videos, audio, documents, and stickers in the background. Requesting a file from imported history starts its download. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Locations and contacts include only their type.
 
-Pairing, messaging, history coverage, chat aliases, and reconnection still need testing with a real WhatsApp number.
+Media defaults to `data/media`. Copy [config.example.yaml](config.example.yaml) to `data/config.yaml` to set limits or storage profiles. `local` stores files in the data directory by default. For AWS S3, add a profile with `driver: s3`, `bucket`, and `region`; the AWS SDK loads credentials from its standard chain. For Cloudflare R2, also set `endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com`, `region: auto`, and environment variable names for the access key and secret key. Set `active_profile` to the profile ID used for new files. Leave old profiles configured while attachments still use them; changing the active profile does not move files. Buckets must remain private.
+
+`max_file_bytes` caps each download, `max_total_bytes` caps recorded files, `max_temp_bytes` caps concurrent staging space, and `workers` controls background downloads. The total limit counts ConvoMeow's recorded files, not other objects in a bucket. A blocked download stays `remote`; its content URL returns `413` or `507` until the relevant limit allows it. This release uses one S3 upload per file, so `max_file_bytes` must stay below 5 GiB. Media sending is not available yet.
 
 The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
 
@@ -76,6 +80,7 @@ The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](http
 - `internal/app`: account sessions, pairing, and message handling
 - `internal/providers/whatsapp`: whatsmeow adapter
 - `internal/store/sqlite`: application database and schema
+- `internal/media`: local and S3-compatible file storage
 - `internal/api/native/v1`: authenticated HTTP API and v1 response types
 - `internal/cli`: API client and QR display
 

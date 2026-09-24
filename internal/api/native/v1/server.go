@@ -28,6 +28,8 @@ func New(service *app.Service, token string) http.Handler {
 	register(mux, "/api/v1/conversations/{id}/messages", map[string]http.HandlerFunc{"GET": s.listConversationMessages, "POST": s.sendMessage})
 	register(mux, "/api/v1/messages", map[string]http.HandlerFunc{"GET": s.listMessages})
 	register(mux, "/api/v1/messages/{id}", map[string]http.HandlerFunc{"GET": s.getMessage})
+	register(mux, "/api/v1/attachments/{id}", map[string]http.HandlerFunc{"GET": s.getAttachment})
+	register(mux, "/api/v1/attachments/{id}/content", map[string]http.HandlerFunc{"GET": s.getAttachmentContent})
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found.")
 	})

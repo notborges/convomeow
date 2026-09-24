@@ -137,6 +137,40 @@ func TestHistoryMappingMergesExistingChatsAndEmptyConversation(t *testing.T) {
 	}
 }
 
+func TestAliasMergeKeepsStoredMediaAndTracksUnusedObject(t *testing.T) {
+	ctx := context.Background()
+	store, _ := historyTestStore(t)
+	defer store.Close()
+	pn, lid := "15557654321@s.whatsapp.net", "media-merge@lid"
+	for _, chat := range []string{pn, lid} {
+		message, err := store.SaveMessage(ctx, core.Message{AccountID: "account-1", ChatID: chat,
+			ProviderMessageID: "same-media", Direction: "inbound", Kind: core.MessageKindImage,
+			OccurredAt: time.Now().UTC(), Attachments: []core.Attachment{{Kind: core.MessageKindImage,
+				Availability: "remote", ProviderRef: []byte("private")}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.MarkMediaReady(ctx, message.Attachments[0].ID, "local", "object-"+chat, 5, make([]byte, 32)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.ImportHistory(ctx, core.HistoryBatch{AccountID: "account-1", Links: []core.ChatLink{{First: pn, Second: lid}}}); err != nil {
+		t.Fatal(err)
+	}
+	messages, err := store.ListMessages(ctx, "account-1", nil, 10)
+	if err != nil || len(messages) != 1 || len(messages[0].Attachments) != 1 {
+		t.Fatalf("merged messages: %+v, %v", messages, err)
+	}
+	record, err := store.GetMedia(ctx, messages[0].Attachments[0].ID)
+	if err != nil || record.Availability != "ready" || record.StoredSize != 5 {
+		t.Fatalf("stored media after merge: %+v, %v", record, err)
+	}
+	orphans, err := store.ListMediaOrphans(ctx, 10)
+	if err != nil || len(orphans) != 1 || orphans[0].Key == record.ObjectKey {
+		t.Fatalf("unused object after merge: %+v, record=%+v, err=%v", orphans, record, err)
+	}
+}
+
 func TestAliasMergeKeepsOutboundSendID(t *testing.T) {
 	ctx := context.Background()
 	store, _ := historyTestStore(t)

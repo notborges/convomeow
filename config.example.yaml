@@ -1,0 +1,22 @@
+media:
+  active_profile: local
+  max_file_bytes: 268435456
+  max_total_bytes: 10737418240
+  max_temp_bytes: 1073741824
+  workers: 2
+  profiles:
+    local:
+      driver: local
+    # AWS S3 uses the SDK credential chain.
+    # aws:
+    #   driver: s3
+    #   bucket: convomeow
+    #   region: us-east-1
+    # Example R2 profile. Set active_profile to r2 after setting the credentials.
+    # r2:
+    #   driver: s3
+    #   bucket: convomeow
+    #   region: auto
+    #   endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com
+    #   access_key_env: CONVOMEOW_R2_ACCESS_KEY_ID
+    #   secret_key_env: CONVOMEOW_R2_SECRET_ACCESS_KEY

@@ -44,14 +44,23 @@ type Service struct {
 	workWG  sync.WaitGroup
 	cancel  context.CancelFunc
 	ctx     context.Context
+	media   mediaState
 }
 
 func New(repo core.Repository, connector core.Connector, logger *slog.Logger) *Service {
+	return NewWithMedia(repo, connector, logger, MediaOptions{})
+}
+
+func NewWithMedia(repo core.Repository, connector core.Connector, logger *slog.Logger, options MediaOptions) *Service {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{repo: repo, connector: connector, logger: logger, accounts: make(map[string]*runtimeAccount), ctx: ctx, cancel: cancel}
+	s := &Service{repo: repo, connector: connector, logger: logger, accounts: make(map[string]*runtimeAccount), ctx: ctx, cancel: cancel}
+	if options.Stores != nil {
+		s.media = mediaState{options: options, queue: make(chan string, max(options.Workers, 1)*4), wake: make(chan struct{}, 1), inflight: make(map[string]bool)}
+	}
+	return s
 }
 
 func (s *Service) Start(ctx context.Context) error {
@@ -89,6 +98,11 @@ func (s *Service) Start(ctx context.Context) error {
 				s.logger.Error("connect failed", "account_id", id, "error", err)
 			}
 		}(account.ID, session, rt)
+	}
+	if s.media.options.Stores != nil {
+		if err := s.startMediaWorkers(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -485,6 +499,7 @@ func (s *Service) onEvent(id string, event core.Event) {
 		rt.lastError = ""
 		rt.challenge = nil
 		rt.mu.Unlock()
+		s.scanPendingMedia()
 	case core.EventDisconnected:
 		rt.mu.Lock()
 		if rt.state == "connected" || rt.state == "connecting" || rt.state == "reconnecting" {
@@ -521,8 +536,18 @@ func (s *Service) onEvent(id string, event core.Event) {
 		}
 		message := *event.Message
 		message.AccountID = id
-		if _, err := s.repo.SaveMessage(context.Background(), message); err != nil {
+		for i := range message.Attachments {
+			message.Attachments[i].AutoFetch = true
+		}
+		saved, err := s.repo.SaveMessage(context.Background(), message)
+		if err != nil {
 			s.logger.Error("save incoming message failed", "account_id", id, "error", err)
+			return
+		}
+		for _, attachment := range saved.Attachments {
+			if attachment.Availability == "remote" {
+				s.queueMedia(attachment.ID)
+			}
 		}
 	case core.EventHistory:
 		if event.History == nil {

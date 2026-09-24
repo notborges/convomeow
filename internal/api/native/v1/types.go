@@ -22,7 +22,7 @@ type accountResponse struct {
 func accountFromCore(a core.AccountStatus) accountResponse {
 	return accountResponse{ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
-		Capabilities: []string{"read_messages", "send_text", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+		Capabilities: []string{"read_messages", "read_media", "send_text", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 type messageResponse struct {
@@ -64,6 +64,15 @@ func messageFromCore(m core.Message) messageResponse {
 	return messageResponse{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
 		Kind: string(m.Kind), Content: content, Attachments: attachments, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
+}
+
+func attachmentFromRecord(record core.MediaRecord) attachmentResponse {
+	size := record.DeclaredSize
+	if record.Availability == "ready" {
+		size = uint64(record.StoredSize)
+	}
+	return attachmentResponse{ID: record.AttachmentID, Kind: string(record.Kind), MIMEType: record.MIMEType,
+		FileName: record.FileName, Size: size, Availability: record.Availability}
 }
 
 type conversationResponse struct {

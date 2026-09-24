@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"time"
 )
 
@@ -24,11 +25,16 @@ const (
 )
 
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrConflict     = errors.New("conflict")
-	ErrInvalid      = errors.New("invalid input")
-	ErrNotConnected = errors.New("account is not connected")
-	ErrIdempotency  = errors.New("idempotency key belongs to another request")
+	ErrNotFound         = errors.New("not found")
+	ErrConflict         = errors.New("conflict")
+	ErrInvalid          = errors.New("invalid input")
+	ErrNotConnected     = errors.New("account is not connected")
+	ErrIdempotency      = errors.New("idempotency key belongs to another request")
+	ErrMediaUnavailable = errors.New("media is unavailable")
+	ErrMediaTooLarge    = errors.New("media exceeds the configured size limit")
+	ErrMediaQuota       = errors.New("media storage limit reached")
+	ErrMediaStorage     = errors.New("media storage is unavailable")
+	ErrMediaBusy        = errors.New("media download queue is full")
 )
 
 type Account struct {
@@ -73,6 +79,37 @@ type Attachment struct {
 	Size         uint64      `json:"size,omitempty"`
 	Availability string      `json:"availability"`
 	ProviderRef  []byte      `json:"-"`
+	AutoFetch    bool        `json:"-"`
+}
+
+type MediaRecord struct {
+	AttachmentID      string
+	AccountID         string
+	ChatID            string
+	ProviderMessageID string
+	Direction         string
+	SenderID          string
+	Kind              MessageKind
+	MIMEType          string
+	FileName          string
+	DeclaredSize      uint64
+	StoredSize        int64
+	Availability      string
+	ProviderRef       []byte `json:"-"`
+	StorageProfileID  string `json:"-"`
+	ObjectKey         string `json:"-"`
+	Version           int64
+	AttemptCount      int
+	FailureCode       string
+	RequiredBytes     int64
+}
+
+type MediaSource struct {
+	ChatID            string
+	ProviderMessageID string
+	Direction         string
+	SenderID          string
+	ProviderRef       []byte `json:"-"`
 }
 
 type ChatLink struct {
@@ -164,6 +201,7 @@ type Session interface {
 	Login(ctx context.Context, onChallenge func(LoginChallenge)) error
 	PrepareText(recipient string) (PreparedText, error)
 	SendText(ctx context.Context, prepared PreparedText, text string) (SentText, error)
+	DownloadMedia(ctx context.Context, source MediaSource, file *os.File, maxBytes int64) ([]byte, error)
 	Identity() string
 	Close()
 }
@@ -191,5 +229,22 @@ type Repository interface {
 	GetMessage(ctx context.Context, id string) (Message, error)
 	ListMessages(ctx context.Context, accountID string, before *PageCursor, limit int) ([]Message, error)
 	ListConversationMessages(ctx context.Context, conversationID string, before *PageCursor, limit int) ([]Message, error)
+	GetMedia(ctx context.Context, attachmentID string) (MediaRecord, error)
+	ListPendingMedia(ctx context.Context, now time.Time, limit int) ([]string, error)
+	StoredMediaBytes(ctx context.Context) (int64, error)
+	MarkMediaReady(ctx context.Context, attachmentID, profileID, key string, size int64, sha256 []byte) error
+	MarkMediaRemote(ctx context.Context, attachmentID string, version int64) error
+	MarkMediaUnavailable(ctx context.Context, attachmentID string) error
+	UpdateMediaRef(ctx context.Context, attachmentID string, ref []byte) error
+	ScheduleMediaRetry(ctx context.Context, attachmentID string, next time.Time, attempts int) error
+	BlockMedia(ctx context.Context, attachmentID, reason string, requiredBytes int64) error
+	ClearMediaBlock(ctx context.Context, attachmentID string) error
+	ListMediaOrphans(ctx context.Context, limit int) ([]MediaObject, error)
+	ClearMediaOrphan(ctx context.Context, object MediaObject) error
 	Close() error
+}
+
+type MediaObject struct {
+	ProfileID string
+	Key       string
 }

@@ -36,7 +36,7 @@ func TestHistorySyncUsesWhatsmeowParserAndBoundsBatches(t *testing.T) {
 	}
 	image := &waE2E.ImageMessage{Mimetype: proto.String("image/jpeg"), FileLength: proto.Uint64(1234),
 		Caption: proto.String("photo"), DirectPath: proto.String("/media/path"), MediaKey: []byte("private-key"),
-		FileSHA256: []byte("plain-hash"), FileEncSHA256: []byte("encrypted-hash")}
+		FileSHA256: make([]byte, 32), FileEncSHA256: make([]byte, 32)}
 	conversation.Messages = append(conversation.Messages, &waHistorySync.HistorySyncMsg{Message: &waWeb.WebMessageInfo{
 		Key:              &waCommon.MessageKey{RemoteJID: proto.String(pn), ID: proto.String("image-1")},
 		MessageTimestamp: proto.Uint64(at + 101), Message: &waE2E.Message{ImageMessage: image},
@@ -85,13 +85,20 @@ func TestHistoryGroupSenderAndEmptyConversation(t *testing.T) {
 	}
 }
 
-func TestMediaAvailabilityRequiresDownloadPath(t *testing.T) {
-	message := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{MediaKey: []byte("key")}}
+func TestMediaAvailabilityWithRetryKey(t *testing.T) {
+	message := &waE2E.Message{ImageMessage: &waE2E.ImageMessage{MediaKey: []byte("key"),
+		FileSHA256: make([]byte, 32), FileEncSHA256: make([]byte, 32)}}
 	attachment := mediaAttachment(message, core.MessageKindImage, false)
-	if attachment == nil || attachment.Availability != "unavailable" {
+	if attachment == nil || attachment.Availability != "remote" || len(attachment.ProviderRef) == 0 {
 		t.Fatalf("missing download path: %+v", attachment)
 	}
+	message.ImageMessage.MediaKey = nil
+	attachment = mediaAttachment(message, core.MessageKindImage, false)
+	if attachment == nil || attachment.Availability != "unavailable" || len(attachment.ProviderRef) != 0 {
+		t.Fatalf("missing media key: %+v", attachment)
+	}
 
+	message.ImageMessage.MediaKey = []byte("key")
 	message.ImageMessage.DirectPath = proto.String("/media/path")
 	attachment = mediaAttachment(message, core.MessageKindImage, true)
 	if attachment == nil || attachment.Availability != "unavailable" || len(attachment.ProviderRef) != 0 {

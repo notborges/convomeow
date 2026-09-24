@@ -116,6 +116,16 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, http.StatusBadRequest, "invalid_input", err.Error())
 	case errors.Is(err, core.ErrNotConnected):
 		writeProblem(w, r, http.StatusConflict, "account_not_connected", "Account is not connected.")
+	case errors.Is(err, core.ErrMediaUnavailable):
+		writeProblem(w, r, http.StatusGone, "media_unavailable", "Media is unavailable.")
+	case errors.Is(err, core.ErrMediaTooLarge):
+		writeProblem(w, r, http.StatusRequestEntityTooLarge, "media_too_large", "Media exceeds the configured file size limit.")
+	case errors.Is(err, core.ErrMediaQuota):
+		writeProblem(w, r, http.StatusInsufficientStorage, "media_quota", "Media storage limit reached.")
+	case errors.Is(err, core.ErrMediaBusy):
+		writeProblem(w, r, http.StatusServiceUnavailable, "media_busy", "Media download queue is full. Retry shortly.")
+	case errors.Is(err, core.ErrMediaStorage):
+		writeProblem(w, r, http.StatusServiceUnavailable, "media_storage_unavailable", "Media storage is unavailable.")
 	default:
 		writeProblem(w, r, http.StatusInternalServerError, "internal_error", "Internal error.")
 	}
