@@ -88,6 +88,6 @@ The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](http
 
 AI tools assist with code and documentation.
 
-Use `make fmt` to format Go files and `make fmt-check` to check them. Run `go build ./...` and `go vet ./...` before contributing a change.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and pull request guidance.
 
 ConvoMeow's code is licensed under [Apache-2.0](LICENSE). Whatsmeow remains a separate MPL-2.0 dependency.

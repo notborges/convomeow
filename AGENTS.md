@@ -21,4 +21,4 @@
 
 - Write commit subjects as `<type>: <imperative summary>`, for example `fix: preserve account state after logout`. Use `feat`, `fix`, `docs`, `refactor`, or `chore`. Keep the subject under 72 characters and omit the final period.
 - Keep commits focused. Add a body when the reason for a change or its compatibility impact is not clear from the subject and diff.
-- Before committing Go changes, run `make fmt-check`, `go build ./...`, and `go vet ./...`. When dependencies change, also run `go mod tidy -diff` and `go mod verify`. Run relevant automated tests when they exist; live WhatsApp behavior needs an account to verify.
+- Before committing Go changes, run `make check`. It checks formatting and module files, verifies dependencies, builds, vets, and runs tests with the race detector. After changing dependencies, run `go mod tidy` and review `go.mod` and `go.sum` before `make check`. Live WhatsApp behavior needs an account to verify.
