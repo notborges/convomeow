@@ -76,12 +76,15 @@ func TestHistoryGroupSenderAndEmptyConversation(t *testing.T) {
 	groupMessage := historyText(group, "group-1", at)
 	groupMessage.Message.Participant = proto.String(sender)
 	s.importHistory(&events.HistorySync{Data: &waHistorySync.HistorySync{Conversations: []*waHistorySync.Conversation{
-		{ID: proto.String(group), Messages: []*waHistorySync.HistorySyncMsg{groupMessage}},
+		{ID: proto.String(group), Name: proto.String("Family"), Description: proto.String("Weekend plans"), Messages: []*waHistorySync.HistorySyncMsg{groupMessage}},
 		{ID: proto.String("15551112222@s.whatsapp.net"), ConversationTimestamp: proto.Uint64(at)},
 	}}})
 	if len(emitted) != 2 || len(emitted[0].History.Messages) != 1 || emitted[0].History.Messages[0].SenderID != sender ||
 		len(emitted[1].History.Messages) != 0 || emitted[1].History.Chat.LastActivityAt.IsZero() {
 		t.Fatalf("group sender or empty conversation: %+v", emitted)
+	}
+	if chat := emitted[0].History.Chat; chat.Kind != "group" || chat.DisplayName != "Family" || chat.Description != "Weekend plans" {
+		t.Fatalf("group profile: %+v", chat)
 	}
 }
 

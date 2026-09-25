@@ -47,7 +47,14 @@ type conversation struct {
 	ID             string   `json:"id"`
 	AccountID      string   `json:"account_id"`
 	ProviderChatID string   `json:"provider_chat_id"`
+	DisplayName    string   `json:"display_name"`
 	LastMessage    *message `json:"last_message"`
+}
+
+type contact struct {
+	ProviderID string `json:"provider_id"`
+	Name       string `json:"name"`
+	Phone      string `json:"phone"`
 }
 
 func New(baseURL, token string) *Client {
@@ -133,6 +140,8 @@ func (c *Client) Run(ctx context.Context, args []string) error {
 		return c.account(ctx, args[1:])
 	case "chat":
 		return c.chat(ctx, args[1:])
+	case "contact":
+		return c.contact(ctx, args[1:])
 	case "message":
 		return c.message(ctx, args[1:])
 	default:
@@ -337,7 +346,7 @@ func (c *Client) chat(ctx context.Context, args []string) error {
 			if chat.LastMessage != nil {
 				preview = messagePreview(*chat.LastMessage)
 			}
-			fmt.Printf("%s  %-35s  %s\n", chat.ID, chat.ProviderChatID, preview)
+			fmt.Printf("%s  %s  [%s]  %s\n", chat.ID, chat.DisplayName, chat.ProviderChatID, preview)
 		}
 		return nil
 	case "messages":
@@ -367,6 +376,36 @@ func (c *Client) chat(ctx context.Context, args []string) error {
 		return nil
 	default:
 		return usage()
+	}
+}
+
+func (c *Client) contact(ctx context.Context, args []string) error {
+	if len(args) < 2 || len(args) > 3 || args[0] != "list" {
+		return usage()
+	}
+	account, err := c.resolve(ctx, args[1])
+	if err != nil {
+		return err
+	}
+	path := "/api/v1/accounts/" + url.PathEscape(account.ID) + "/contacts?limit=200"
+	if len(args) == 3 {
+		path += "&q=" + url.QueryEscape(args[2])
+	}
+	for {
+		var result page[contact]
+		if err := c.do(ctx, http.MethodGet, path, nil, &result); err != nil {
+			return err
+		}
+		for _, entry := range result.Items {
+			fmt.Printf("%s  %s  %s\n", entry.Name, entry.Phone, entry.ProviderID)
+		}
+		if result.NextCursor == "" {
+			return nil
+		}
+		path = "/api/v1/accounts/" + url.PathEscape(account.ID) + "/contacts?limit=200&cursor=" + url.QueryEscape(result.NextCursor)
+		if len(args) == 3 {
+			path += "&q=" + url.QueryEscape(args[2])
+		}
 	}
 }
 
@@ -408,5 +447,5 @@ func renderQR(w io.Writer, data string) error {
 }
 
 func usage() error {
-	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message send-file [--key KEY] [--caption TEXT] [--upload-id ID] ACCOUNT PHONE_OR_CONVERSATION_ID KIND [FILE] | message list ACCOUNT")
+	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | contact list ACCOUNT [QUERY] | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message send-file [--key KEY] [--caption TEXT] [--upload-id ID] ACCOUNT PHONE_OR_CONVERSATION_ID KIND [FILE] | message list ACCOUNT")
 }

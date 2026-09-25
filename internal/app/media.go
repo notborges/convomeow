@@ -54,7 +54,7 @@ func (s *Service) startMediaWorkers() error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && (strings.HasPrefix(entry.Name(), ".download-") || strings.HasPrefix(entry.Name(), ".upload-") || strings.HasPrefix(entry.Name(), ".encrypt-")) {
+		if !entry.IsDir() && (strings.HasPrefix(entry.Name(), ".download-") || strings.HasPrefix(entry.Name(), ".upload-") || strings.HasPrefix(entry.Name(), ".encrypt-") || strings.HasPrefix(entry.Name(), ".avatar-")) {
 			if err := os.Remove(filepath.Join(s.media.options.TempDir, entry.Name())); err != nil {
 				return fmt.Errorf("remove abandoned media staging file: %w", err)
 			}

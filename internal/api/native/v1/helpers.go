@@ -126,6 +126,8 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, http.StatusServiceUnavailable, "media_busy", "Media is busy. Retry shortly.")
 	case errors.Is(err, core.ErrMediaStorage):
 		writeProblem(w, r, http.StatusServiceUnavailable, "media_storage_unavailable", "Media storage is unavailable.")
+	case errors.Is(err, core.ErrAvatarFetch):
+		writeProblem(w, r, http.StatusBadGateway, "avatar_unavailable", "Avatar is temporarily unavailable.")
 	default:
 		writeProblem(w, r, http.StatusInternalServerError, "internal_error", "Internal error.")
 	}

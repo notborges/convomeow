@@ -50,9 +50,19 @@ func Key(accountID, attachmentID string) (string, error) {
 	return "accounts/" + accountID + "/attachments/" + attachmentID, nil
 }
 
+func AvatarKey(accountID, avatarID string) (string, error) {
+	if _, err := uuid.Parse(accountID); err != nil {
+		return "", fmt.Errorf("invalid account ID: %w", err)
+	}
+	if _, err := uuid.Parse(avatarID); err != nil {
+		return "", fmt.Errorf("invalid avatar ID: %w", err)
+	}
+	return "accounts/" + accountID + "/avatars/" + avatarID, nil
+}
+
 func validKey(key string) bool {
 	parts := strings.Split(key, "/")
-	if len(parts) != 4 || parts[0] != "accounts" || parts[2] != "attachments" {
+	if len(parts) != 4 || parts[0] != "accounts" || (parts[2] != "attachments" && parts[2] != "avatars") {
 		return false
 	}
 	_, accountErr := uuid.Parse(parts[1])

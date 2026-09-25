@@ -140,6 +140,7 @@ func (s *session) handleEvent(evt any) {
 		s.historyWG.Wait()
 	}
 	translateEvent(s.emit, evt)
+	s.handleProfileEvent(evt)
 }
 
 func (s *session) Login(ctx context.Context, onChallenge func(core.LoginChallenge)) error {

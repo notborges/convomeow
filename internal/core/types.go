@@ -36,6 +36,7 @@ var (
 	ErrMediaQuota       = errors.New("media storage limit reached")
 	ErrMediaStorage     = errors.New("media storage is unavailable")
 	ErrMediaBusy        = errors.New("media queue is full")
+	ErrAvatarFetch      = errors.New("avatar is temporarily unavailable")
 )
 
 type Account struct {
@@ -122,6 +123,9 @@ type HistoryChat struct {
 	ID             string
 	Aliases        []string
 	PreferredID    string
+	Kind           string
+	DisplayName    string
+	Description    string
 	LastActivityAt time.Time
 }
 
@@ -136,9 +140,47 @@ type Conversation struct {
 	ID             string    `json:"id"`
 	AccountID      string    `json:"account_id"`
 	ProviderChatID string    `json:"provider_chat_id"`
+	Kind           string    `json:"kind"`
+	DisplayName    string    `json:"display_name"`
+	Description    string    `json:"description,omitempty"`
+	Contact        *Contact  `json:"contact,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	LastMessage    *Message  `json:"last_message,omitempty"`
+}
+
+type Contact struct {
+	ProviderID  string `json:"provider_id"`
+	Name        string `json:"name"`
+	Phone       string `json:"phone,omitempty"`
+	MaskedPhone string `json:"masked_phone,omitempty"`
+	AlternateID string `json:"-"`
+}
+
+type ChatProfile struct {
+	ProviderChatID     string
+	AlternateID        string
+	Kind               string
+	DisplayName        *string
+	Description        *string
+	CreateConversation bool
+}
+
+type Avatar struct {
+	ContentType string
+	Data        []byte
+	PictureID   string
+}
+
+type AvatarRecord struct {
+	AccountID   string
+	ProviderID  string
+	PictureID   string
+	ProfileID   string
+	ObjectKey   string
+	ContentType string
+	Size        int64
+	CheckedAt   time.Time
 }
 
 type ConversationTarget struct {
@@ -167,21 +209,26 @@ type LoginStatus struct {
 type EventType string
 
 const (
-	EventConnected    EventType = "connected"
-	EventDisconnected EventType = "disconnected"
-	EventLoggedOut    EventType = "logged_out"
-	EventPaired       EventType = "paired"
-	EventMessage      EventType = "message"
-	EventHistory      EventType = "history"
-	EventError        EventType = "error"
+	EventConnected     EventType = "connected"
+	EventDisconnected  EventType = "disconnected"
+	EventLoggedOut     EventType = "logged_out"
+	EventPaired        EventType = "paired"
+	EventMessage       EventType = "message"
+	EventHistory       EventType = "history"
+	EventChatProfile   EventType = "chat_profile"
+	EventAvatarChanged EventType = "avatar_changed"
+	EventError         EventType = "error"
 )
 
 type Event struct {
-	Type     EventType
-	Identity string
-	Message  *Message
-	History  *HistoryBatch
-	Err      error
+	Type          EventType
+	Identity      string
+	Message       *Message
+	History       *HistoryBatch
+	Profile       *ChatProfile
+	AvatarID      string
+	AvatarRemoved bool
+	Err           error
 }
 
 type SentMessage struct {
@@ -205,6 +252,9 @@ type Session interface {
 	UploadMedia(ctx context.Context, kind MessageKind, data io.Reader, scratch *os.File) (UploadedMedia, error)
 	SendMedia(ctx context.Context, prepared PreparedMessage, media OutgoingMedia, uploaded UploadedMedia) (SentMessage, error)
 	DownloadMedia(ctx context.Context, source MediaSource, file *os.File, maxBytes int64) ([]byte, error)
+	Contact(ctx context.Context, providerID string) (Contact, error)
+	Contacts(ctx context.Context) ([]Contact, error)
+	FetchAvatar(ctx context.Context, providerID, existingID string) (Avatar, bool, error)
 	Identity() string
 	Close()
 }
@@ -224,6 +274,9 @@ type Repository interface {
 	GetOrCreateConversation(ctx context.Context, accountID, providerChatID string) (Conversation, bool, error)
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	ListConversations(ctx context.Context, accountID string, before *PageCursor, limit int) ([]Conversation, error)
+	ListGroupChatIDs(ctx context.Context, accountID string) ([]string, error)
+	UpdateChatProfile(ctx context.Context, accountID string, profile ChatProfile) error
+	LinkChats(ctx context.Context, accountID string, link ChatLink) error
 	SaveMessage(ctx context.Context, message Message) (Message, error)
 	ImportHistory(ctx context.Context, batch HistoryBatch) error
 	LookupSend(ctx context.Context, actorID, key, requestHash string) (Message, bool, error)
@@ -256,6 +309,10 @@ type Repository interface {
 	ClearMediaBlock(ctx context.Context, attachmentID string) error
 	ListMediaOrphans(ctx context.Context, limit int) ([]MediaObject, error)
 	ClearMediaOrphan(ctx context.Context, object MediaObject) error
+	GetAvatar(ctx context.Context, accountID, providerID string) (AvatarRecord, error)
+	SaveAvatar(ctx context.Context, record AvatarRecord) error
+	TouchAvatar(ctx context.Context, accountID, providerID string, checkedAt time.Time) error
+	ClearAccountAvatars(ctx context.Context, accountID string) error
 	Close() error
 }
 

@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   description: >-
     The v1 API covers WhatsApp linked-device accounts, pairing, conversations,
-    text and media messages, and stored media.
+    text and media messages, contacts, profile photos, and stored media.
 security:
   - bearerToken: []
 paths:
@@ -220,7 +220,7 @@ paths:
       - $ref: '#/components/parameters/AccountID'
     post:
       operationId: createConversation
-      summary: Find or create a conversation for a phone number
+      summary: Find or create a conversation for a phone number or synced contact
       requestBody:
         required: true
         content:
@@ -258,6 +258,99 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/contacts:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: listContacts
+      summary: List synced contacts
+      description: Includes contacts with no conversation. Results use contact name order.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: q
+          in: query
+          description: Match a name, phone number, or provider ID.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Contacts from the linked account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/contacts/{provider_id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - $ref: '#/components/parameters/ProviderContactID'
+    get:
+      operationId: getContact
+      summary: Read a synced contact
+      responses:
+        '200':
+          description: Saved name and available phone number.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/contacts/{provider_id}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - $ref: '#/components/parameters/ProviderContactID'
+    get:
+      operationId: getContactAvatar
+      summary: Read a contact's profile photo
+      description: Returns a saved preview while the account is disconnected. A missing photo requires a connected account to fetch it.
+      responses:
+        '200':
+          description: Profile photo preview.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          description: Profile photo could not be fetched from the provider.
+        '503':
+          description: Saved media is unavailable or staging is busy.
+        '507':
+          description: Media storage limit reached.
   /api/v1/conversations:
     get:
       operationId: listConversations
@@ -300,6 +393,41 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/conversations/{id}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getConversationAvatar
+      summary: Read a conversation's profile photo
+      description: Returns a saved contact or group preview while the account is disconnected.
+      responses:
+        '200':
+          description: Contact or group photo preview.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          description: Profile photo could not be fetched from the provider.
+        '503':
+          description: Saved media is unavailable or staging is busy.
+        '507':
+          description: Media storage limit reached.
   /api/v1/conversations/{id}/messages:
     parameters:
       - $ref: '#/components/parameters/ConversationID'
@@ -528,6 +656,13 @@ components:
       required: true
       schema:
         type: string
+    ProviderContactID:
+      name: provider_id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Provider ID from a contact response. URL-encode it in this path.
     ConversationID:
       name: id
       in: path
@@ -694,12 +829,41 @@ components:
           properties:
             type:
               type: string
-              const: phone_number
+              enum: [phone_number, contact]
             value:
               type: string
+              description: Phone number or provider_id from a synced contact.
+    Contact:
+      type: object
+      required: [provider_id, name, avatar_url]
+      properties:
+        provider_id:
+          type: string
+        name:
+          type: string
+          description: Saved name, business name, push name, or number when no name is available.
+        phone:
+          type: string
+          description: Present when WhatsApp exposes the full phone number.
+        masked_phone:
+          type: string
+          description: Redacted number supplied for some group members.
+        avatar_url:
+          type: string
+          description: Authenticated API path. Returns 404 if the photo is missing or hidden.
+    ContactPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        next_cursor:
+          type: string
     Conversation:
       type: object
-      required: [id, account_id, provider_chat_id, created_at, updated_at]
+      required: [id, account_id, provider_chat_id, kind, display_name, avatar_url, created_at, updated_at]
       properties:
         id:
           type: string
@@ -708,6 +872,19 @@ components:
         provider_chat_id:
           type: string
           description: Provider identifier for display or interoperability. Use id in URL paths.
+        kind:
+          type: string
+          enum: [direct, group]
+        display_name:
+          type: string
+        description:
+          type: string
+          description: Group description when available.
+        avatar_url:
+          type: string
+          description: Authenticated API path. Returns 404 if the photo is missing or hidden.
+        contact:
+          $ref: '#/components/schemas/Contact'
         created_at:
           type: string
           format: date-time

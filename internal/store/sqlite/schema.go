@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 7
+const schemaVersion = 9
 
 func (s *Store) initSchema(ctx context.Context) error {
 	var version int
@@ -46,6 +46,9 @@ CREATE TABLE conversations (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   provider_chat_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'direct',
+  display_name TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   last_message_id TEXT,
@@ -113,6 +116,17 @@ CREATE TABLE media_orphans (
   object_key TEXT NOT NULL,
   PRIMARY KEY(profile_id, object_key)
 );
+CREATE TABLE avatars (
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  provider_id TEXT NOT NULL,
+  picture_id TEXT NOT NULL DEFAULT '',
+  storage_profile_id TEXT,
+  object_key TEXT,
+  content_type TEXT NOT NULL DEFAULT '',
+  size INTEGER NOT NULL DEFAULT 0,
+  checked_at TEXT NOT NULL,
+  PRIMARY KEY(account_id, provider_id)
+);
 CREATE TABLE send_keys (
   actor_id TEXT NOT NULL,
   key TEXT NOT NULL,
@@ -145,7 +159,7 @@ CREATE INDEX outgoing_media_pending ON outgoing_media_jobs(phase, next_attempt_a
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 7`); err != nil {
+	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 9`); err != nil {
 		return err
 	}
 	return tx.Commit()

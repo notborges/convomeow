@@ -22,7 +22,7 @@ type accountResponse struct {
 func accountFromCore(a core.AccountStatus) accountResponse {
 	return accountResponse{ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
-		Capabilities: []string{"read_messages", "read_media", "send_text", "send_media", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+		Capabilities: []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 type messageResponse struct {
@@ -79,6 +79,11 @@ type conversationResponse struct {
 	ID             string           `json:"id"`
 	AccountID      string           `json:"account_id"`
 	ProviderChatID string           `json:"provider_chat_id"`
+	Kind           string           `json:"kind"`
+	DisplayName    string           `json:"display_name"`
+	Description    string           `json:"description,omitempty"`
+	AvatarURL      string           `json:"avatar_url"`
+	Contact        *contactResponse `json:"contact,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
 	UpdatedAt      time.Time        `json:"updated_at"`
 	LastMessage    *messageResponse `json:"last_message,omitempty"`
@@ -86,7 +91,12 @@ type conversationResponse struct {
 
 func conversationFromCore(c core.Conversation) conversationResponse {
 	result := conversationResponse{ID: c.ID, AccountID: c.AccountID, ProviderChatID: c.ProviderChatID,
+		Kind: c.Kind, DisplayName: c.DisplayName, Description: c.Description, AvatarURL: "/api/v1/conversations/" + c.ID + "/avatar",
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.Contact != nil {
+		contact := contactFromCore(c.AccountID, *c.Contact)
+		result.Contact = &contact
+	}
 	if c.LastMessage != nil {
 		last := messageFromCore(*c.LastMessage)
 		result.LastMessage = &last

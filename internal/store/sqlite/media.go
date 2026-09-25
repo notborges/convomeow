@@ -64,7 +64,8 @@ func (s *Store) StoredMediaBytes(ctx context.Context) (int64, error) {
 	var total int64
 	err := s.db.QueryRowContext(ctx, `SELECT
 (SELECT COALESCE(SUM(stored_size), 0) FROM attachments WHERE availability = 'ready') +
-(SELECT COALESCE(SUM(size), 0) FROM uploads)`).Scan(&total)
+(SELECT COALESCE(SUM(size), 0) FROM uploads) +
+(SELECT COALESCE(SUM(size), 0) FROM avatars WHERE object_key IS NOT NULL)`).Scan(&total)
 	return total, err
 }
 

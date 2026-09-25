@@ -35,6 +35,16 @@ func (s *Store) ImportHistory(ctx context.Context, batch core.HistoryBatch) erro
 				return normalizeError(err)
 			}
 		}
+		profile := core.ChatProfile{Kind: batch.Chat.Kind}
+		if batch.Chat.DisplayName != "" {
+			profile.DisplayName = &batch.Chat.DisplayName
+		}
+		if batch.Chat.Description != "" {
+			profile.Description = &batch.Chat.Description
+		}
+		if err := updateChatProfileTx(ctx, tx, conversation.ID, profile); err != nil {
+			return err
+		}
 		for _, message := range batch.Messages {
 			message.AccountID = batch.AccountID
 			message.ConversationID = conversation.ID

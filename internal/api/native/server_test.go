@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,6 +35,15 @@ type fakeConnector struct {
 	mediaSends      atomic.Int64
 	failMediaUpload atomic.Bool
 	failMediaSend   atomic.Bool
+	contacts        map[string]core.Contact
+	avatar          core.Avatar
+	avatarMu        sync.RWMutex
+	avatarGate      <-chan struct{}
+	avatarStarted   chan<- struct{}
+	avatarFetches   atomic.Int64
+	offline         bool
+	eventMu         sync.Mutex
+	event           func(core.Event)
 }
 
 func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, error) {
@@ -44,11 +54,38 @@ func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, e
 }
 
 func (c *fakeConnector) Open(_ context.Context, _ string, emit func(core.Event)) (core.Session, error) {
+	c.eventMu.Lock()
+	c.event = emit
+	c.eventMu.Unlock()
 	return &fakeSession{connector: c, emit: emit}, nil
 }
 
 func (c *fakeConnector) New(emit func(core.Event)) (core.Session, error) {
+	c.eventMu.Lock()
+	c.event = emit
+	c.eventMu.Unlock()
 	return &fakeSession{connector: c, emit: emit}, nil
+}
+
+func (c *fakeConnector) emitEvent(event core.Event) {
+	c.eventMu.Lock()
+	emit := c.event
+	c.eventMu.Unlock()
+	if emit != nil {
+		emit(event)
+	}
+}
+
+func (c *fakeConnector) setAvatar(avatar core.Avatar) {
+	c.avatarMu.Lock()
+	c.avatar = avatar
+	c.avatarMu.Unlock()
+}
+
+func (c *fakeConnector) setAvatarGate(gate <-chan struct{}, started chan<- struct{}) {
+	c.avatarMu.Lock()
+	c.avatarGate, c.avatarStarted = gate, started
+	c.avatarMu.Unlock()
 }
 
 func (c *fakeConnector) Close() error { return nil }
@@ -59,7 +96,11 @@ type fakeSession struct {
 }
 
 func (s *fakeSession) Connect() error {
-	s.emit(core.Event{Type: core.EventConnected})
+	if s.connector.offline {
+		s.emit(core.Event{Type: core.EventDisconnected})
+	} else {
+		s.emit(core.Event{Type: core.EventConnected})
+	}
 	return nil
 }
 
@@ -127,6 +168,49 @@ func (s *fakeSession) DownloadMedia(ctx context.Context, _ core.MediaSource, fil
 	}
 	_, err := file.Write(s.connector.mediaPayload)
 	return nil, err
+}
+
+func (s *fakeSession) Contact(_ context.Context, providerID string) (core.Contact, error) {
+	contact, ok := s.connector.contacts[providerID]
+	if !ok {
+		return core.Contact{}, core.ErrNotFound
+	}
+	return contact, nil
+}
+
+func (s *fakeSession) Contacts(_ context.Context) ([]core.Contact, error) {
+	contacts := make([]core.Contact, 0, len(s.connector.contacts))
+	for _, contact := range s.connector.contacts {
+		contacts = append(contacts, contact)
+	}
+	return contacts, nil
+}
+
+func (s *fakeSession) FetchAvatar(ctx context.Context, _, existingID string) (core.Avatar, bool, error) {
+	s.connector.avatarFetches.Add(1)
+	s.connector.avatarMu.RLock()
+	avatar, gate, started := s.connector.avatar, s.connector.avatarGate, s.connector.avatarStarted
+	s.connector.avatarMu.RUnlock()
+	if started != nil {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+	}
+	if gate != nil {
+		select {
+		case <-ctx.Done():
+			return core.Avatar{}, false, ctx.Err()
+		case <-gate:
+		}
+	}
+	if len(avatar.Data) == 0 {
+		return core.Avatar{}, false, core.ErrNotFound
+	}
+	if existingID != "" && existingID == avatar.PictureID {
+		return core.Avatar{}, true, nil
+	}
+	return avatar, false, nil
 }
 
 func (s *fakeSession) Identity() string { return "test-device" }

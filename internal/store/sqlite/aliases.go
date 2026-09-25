@@ -16,6 +16,21 @@ type conversationCandidate struct {
 	created string
 }
 
+func (s *Store) LinkChats(ctx context.Context, accountID string, link core.ChatLink) error {
+	if accountID == "" {
+		return core.ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := addChatLinkTx(ctx, tx, accountID, link); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func ensureConversationTx(ctx context.Context, tx *sql.Tx, accountID, chatID string, aliases []string, createdAt time.Time) (core.Conversation, bool, error) {
 	if accountID == "" || chatID == "" {
 		return core.Conversation{}, false, core.ErrInvalid
@@ -130,6 +145,13 @@ func addChatLinkTx(ctx context.Context, tx *sql.Tx, accountID string, link core.
 }
 
 func mergeConversationTx(ctx context.Context, tx *sql.Tx, targetID, sourceID string) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE conversations SET
+kind = CASE WHEN source.kind = 'group' THEN 'group' ELSE conversations.kind END,
+display_name = CASE WHEN conversations.display_name = '' THEN source.display_name ELSE conversations.display_name END,
+description = CASE WHEN conversations.description = '' THEN source.description ELSE conversations.description END
+FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targetID, sourceID); err != nil {
+		return err
+	}
 	type entry struct{ id, providerID, direction string }
 	for {
 		rows, err := tx.QueryContext(ctx, `SELECT public_id, provider_message_id, direction FROM messages WHERE conversation_id = ? LIMIT 100`, sourceID)

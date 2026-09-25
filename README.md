@@ -1,6 +1,6 @@
 # ConvoMeow
 
-ConvoMeow runs WhatsApp accounts on one server through [whatsmeow](https://github.com/tulir/whatsmeow). Its CLI uses a local HTTP API to manage accounts, send text and files, and read saved messages.
+ConvoMeow runs WhatsApp accounts on one server through [whatsmeow](https://github.com/tulir/whatsmeow). Its CLI uses a local HTTP API to manage accounts, browse contacts and conversations, send text and files, and read saved messages.
 
 ## Build and run
 
@@ -17,6 +17,7 @@ In another terminal:
 ./convomeow account add sales
 ./convomeow account login sales
 ./convomeow account list
+./convomeow contact list sales
 ./convomeow message send sales +15551234567 'Hello'
 ./convomeow message send-file --caption 'Photo' sales +15551234567 image ./photo.png
 ./convomeow message send-file sales +15551234567 document ./invoice.pdf
@@ -50,14 +51,17 @@ On first start, the daemon creates `data/control.token`. Send its value as `Auth
 | `GET` | `/api/v1/accounts/{id}/login-attempts/{attempt_id}` | Read the QR challenge or pairing state |
 | `POST` | `/api/v1/accounts/{id}/uploads` | Store one file for sending |
 | `DELETE` | `/api/v1/accounts/{id}/uploads/{upload_id}` | Delete an unused upload |
-| `POST` | `/api/v1/accounts/{id}/conversations` | Find or create a conversation for a phone number |
+| `POST` | `/api/v1/accounts/{id}/conversations` | Find or create a conversation for a phone number or synced contact |
+| `GET` | `/api/v1/accounts/{id}/contacts`, `/api/v1/accounts/{id}/contacts/{provider_id}` | List and read synced contacts |
+| `GET` | `/api/v1/accounts/{id}/contacts/{provider_id}/avatar` | Read a contact's profile photo |
 | `GET` | `/api/v1/conversations`, `/api/v1/conversations/{id}` | List and read conversations |
+| `GET` | `/api/v1/conversations/{id}/avatar` | Read a contact or group photo |
 | `GET`, `POST` | `/api/v1/conversations/{id}/messages` | Read a thread or send text or media |
 | `GET` | `/api/v1/messages`, `/api/v1/messages/{id}` | Read an account's messages or one message |
 | `GET` | `/api/v1/attachments/{id}` | Read attachment metadata and availability |
 | `GET`, `HEAD` | `/api/v1/attachments/{id}/content` | Download stored media or request a remote file |
 
-Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. Send to its ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
+Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. To start from a synced contact, use `{"target":{"type":"contact","value":"<provider_id>"}}`. Send to the conversation ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
 
 To send a file, post one multipart `file` part to the account's uploads route. The response contains an upload ID. Send `{"kind":"image","content":{"upload_id":"<id>","caption":"Photo"}}` to the conversation's messages route with an `Idempotency-Key` header. Images accept JPEG, PNG, or WebP; videos accept MP4 or 3GPP; audio accepts MP3, MP4, Ogg, AAC, or AMR. Documents accept any valid MIME type. Stickers must be static WebP files. Audio and stickers do not accept captions. Each upload belongs to one account, can be sent once, and expires after 24 hours if unused. You can delete an unused upload with its DELETE route.
 
@@ -67,17 +71,19 @@ List responses contain `items` and, when more records exist, `next_cursor`. Pass
 
 ConvoMeow assigns conversation and message IDs. WhatsApp chat IDs appear as read-only `provider_chat_id` values; API paths use ConvoMeow IDs.
 
+The contacts route lists synced contacts, including people with no chat, and accepts `q`, `limit`, and `cursor`. Saved names take priority over business and push names; phone numbers may be unavailable. Conversations include a display name and an avatar URL. After an account connects, ConvoMeow fetches contact and group photo previews in the background and stores them in the active media profile. Cached photos remain available while the account is disconnected. ConvoMeow checks saved photos again after 24 hours and missing photos after six hours. It also refreshes photos when WhatsApp reports a change. If WhatsApp hides or removes a photo, the next check removes the saved copy and the avatar route returns `404`. A photo may stay cached while the account is offline. Logging out clears the account's photo cache.
+
 The API saves an outgoing message before asking WhatsApp to send it. A failed request may leave its state as `outcome_unknown`; check that message before sending again. The CLI prints a retry key when a text send request fails. Media uploads can retry before ConvoMeow calls WhatsApp's send operation. A send error after that point does not trigger an automatic resend.
 
 ## Data and limits
 
-`data/app.sqlite` holds accounts, messages, media metadata, and send jobs. `data/whatsmeow.sqlite` holds WhatsApp sessions. Protect both databases, stored media, and their backups. ConvoMeow creates the data directory, control token, and local media files with owner-only permissions.
+`data/app.sqlite` holds accounts, conversations, group details, messages, media metadata, and send jobs. `data/whatsmeow.sqlite` holds WhatsApp sessions and synced contact names. Protect both databases, stored media, and their backups. ConvoMeow creates the data directory, control token, and local media files with owner-only permissions.
 
-ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It attempts to download new images, videos, audio, documents, and stickers in the background. Requesting a file from imported history starts its download. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Locations and contacts include only their type.
+ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It attempts to download new images, videos, audio, documents, and stickers in the background. Requesting a file from imported history starts its download. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
 
-Media defaults to `data/media`. Copy [config.example.yaml](config.example.yaml) to `data/config.yaml` to set limits or storage profiles. `local` stores files in the data directory by default. For AWS S3, add a profile with `driver: s3`, `bucket`, and `region`; the AWS SDK loads credentials from its standard chain. For Cloudflare R2, also set `endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com`, `region: auto`, and environment variable names for the access key and secret key. Set `active_profile` to the profile ID used for new files. Leave old profiles configured while attachments still use them; changing the active profile does not move files. Buckets must remain private.
+Media defaults to `data/media`. Copy [config.example.yaml](config.example.yaml) to `data/config.yaml` to set limits or storage profiles. `local` stores files in the data directory by default. For AWS S3, add a profile with `driver: s3`, `bucket`, and `region`; the AWS SDK loads credentials from its standard chain. For Cloudflare R2, also set `endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com`, `region: auto`, and environment variable names for the access key and secret key. Set `active_profile` to the profile ID used for new files. Leave old profiles configured while attachments or avatars still use them; changing the active profile does not move files. Buckets must remain private.
 
-`max_file_bytes` caps each upload and download, `max_total_bytes` caps stored attachments and unused uploads, `max_temp_bytes` caps concurrent staging space, and `workers` controls background downloads and sends. The total limit counts ConvoMeow's recorded files, not other objects in a bucket. A blocked download stays `remote`; its content URL returns `413` or `507` until the relevant limit allows it. This release uses one S3 upload per file, so `max_file_bytes` must stay below 5 GiB.
+`max_file_bytes` caps each upload and download, `max_total_bytes` caps stored attachments, avatars, and unused uploads, `max_temp_bytes` caps concurrent staging space, and `workers` controls background downloads and sends. The total limit counts ConvoMeow's recorded files, not other objects in a bucket. A blocked download stays `remote`; its content URL returns `413` or `507` until the relevant limit allows it. This release uses one S3 upload per file, so `max_file_bytes` must stay below 5 GiB.
 
 The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
 

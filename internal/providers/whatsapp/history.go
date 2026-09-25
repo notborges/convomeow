@@ -103,6 +103,17 @@ func historyChat(conversation *waHistorySync.Conversation) (core.HistoryChat, ty
 		timestamp = conversation.GetConversationTimestamp()
 	}
 	chat := core.HistoryChat{ID: primary.String(), Aliases: aliases, LastActivityAt: historyTimestamp(timestamp)}
+	if primary.Server == types.GroupServer {
+		chat.Kind = "group"
+		chat.DisplayName = conversation.GetName()
+		chat.Description = conversation.GetDescription()
+	} else {
+		chat.Kind = "direct"
+		chat.DisplayName = conversation.GetDisplayName()
+		if chat.DisplayName == "" && primary.Server == types.DefaultUserServer {
+			chat.DisplayName = "+" + primary.User
+		}
+	}
 	if newest, ok := historyJID(conversation.GetNewJID()); ok {
 		chat.PreferredID = newest.String()
 	}
