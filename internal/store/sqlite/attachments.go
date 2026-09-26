@@ -22,9 +22,12 @@ func saveAttachmentsTx(ctx context.Context, tx *sql.Tx, messageID string, attach
 		if attachment.Availability == "" {
 			attachment.Availability = "remote"
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO attachments(id, message_id, part_index, kind, mime_type, file_name, size, availability, provider_ref, auto_fetch)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		_, err := tx.ExecContext(ctx, `INSERT INTO attachments(id, message_id, part_index, kind, mime_type, file_name, size, availability, provider_ref, auto_fetch, width, height, duration_seconds)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(message_id, part_index) DO UPDATE SET
+duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE attachments.duration_seconds END,
+width = CASE WHEN excluded.width > 0 AND excluded.height > 0 THEN excluded.width ELSE attachments.width END,
+height = CASE WHEN excluded.width > 0 AND excluded.height > 0 THEN excluded.height ELSE attachments.height END,
 mime_type = CASE WHEN excluded.mime_type != '' THEN excluded.mime_type ELSE attachments.mime_type END,
 file_name = CASE WHEN excluded.file_name != '' THEN excluded.file_name ELSE attachments.file_name END,
 size = CASE WHEN excluded.size != 0 THEN excluded.size ELSE attachments.size END,
@@ -32,7 +35,7 @@ availability = CASE WHEN attachments.availability = 'ready' THEN 'ready' WHEN ex
 provider_ref = COALESCE(excluded.provider_ref, attachments.provider_ref),
 auto_fetch = CASE WHEN attachments.failure_code != '' THEN 0 ELSE max(attachments.auto_fetch, excluded.auto_fetch) END`,
 			attachment.ID, messageID, attachment.Index, attachment.Kind, attachment.MIMEType,
-			attachment.FileName, int64(attachment.Size), attachment.Availability, attachment.ProviderRef, attachment.AutoFetch)
+			attachment.FileName, int64(attachment.Size), attachment.Availability, attachment.ProviderRef, attachment.AutoFetch, attachment.Width, attachment.Height, attachment.DurationSeconds)
 		if err != nil {
 			return normalizeError(err)
 		}
@@ -42,7 +45,7 @@ auto_fetch = CASE WHEN attachments.failure_code != '' THEN 0 ELSE max(attachment
 
 func mergeAttachmentsTx(ctx context.Context, tx *sql.Tx, targetID, sourceID string) error {
 	rows, err := tx.QueryContext(ctx, `SELECT part_index, kind, mime_type, file_name, size, availability, provider_ref, auto_fetch,
-storage_profile_id, object_key, stored_size, stored_sha256 FROM attachments WHERE message_id = ?`, sourceID)
+storage_profile_id, object_key, stored_size, stored_sha256, width, height, duration_seconds FROM attachments WHERE message_id = ?`, sourceID)
 	if err != nil {
 		return err
 	}
@@ -59,7 +62,7 @@ storage_profile_id, object_key, stored_size, stored_sha256 FROM attachments WHER
 		var size int64
 		if err := rows.Scan(&a.attachment.Index, &a.attachment.Kind, &a.attachment.MIMEType, &a.attachment.FileName,
 			&size, &a.attachment.Availability, &a.attachment.ProviderRef, &a.attachment.AutoFetch,
-			&a.profileID, &a.objectKey, &a.storedSize, &a.sha256); err != nil {
+			&a.profileID, &a.objectKey, &a.storedSize, &a.sha256, &a.attachment.Width, &a.attachment.Height, &a.attachment.DurationSeconds); err != nil {
 			rows.Close()
 			return err
 		}
@@ -120,7 +123,7 @@ func (s *Store) attachToMessages(ctx context.Context, messages []core.Message) e
 		marks = append(marks, "?")
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id, message_id, part_index, kind, mime_type, file_name,
-CASE WHEN availability = 'ready' AND stored_size IS NOT NULL THEN stored_size ELSE size END, availability
+CASE WHEN availability = 'ready' AND stored_size IS NOT NULL THEN stored_size ELSE size END, availability, width, height, duration_seconds
 FROM attachments WHERE message_id IN (`+strings.Join(marks, ",")+`) ORDER BY message_id, part_index`, args...)
 	if err != nil {
 		return err
@@ -130,7 +133,7 @@ FROM attachments WHERE message_id IN (`+strings.Join(marks, ",")+`) ORDER BY mes
 		var a core.Attachment
 		var messageID string
 		var size int64
-		if err := rows.Scan(&a.ID, &messageID, &a.Index, &a.Kind, &a.MIMEType, &a.FileName, &size, &a.Availability); err != nil {
+		if err := rows.Scan(&a.ID, &messageID, &a.Index, &a.Kind, &a.MIMEType, &a.FileName, &size, &a.Availability, &a.Width, &a.Height, &a.DurationSeconds); err != nil {
 			return err
 		}
 		if size < 0 {

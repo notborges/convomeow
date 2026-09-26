@@ -32,18 +32,23 @@ func mediaAttachment(message *waE2E.Message, kind core.MessageKind, viewOnce boo
 	switch kind {
 	case core.MessageKindImage:
 		media := message.GetImageMessage()
+		attachment.Width, attachment.Height = media.GetWidth(), media.GetHeight()
 		downloadable, attachment.MIMEType, attachment.Size = media, media.GetMimetype(), media.GetFileLength()
 	case core.MessageKindVideo:
 		media := message.GetVideoMessage()
+		attachment.DurationSeconds = media.GetSeconds()
+		attachment.Width, attachment.Height = media.GetWidth(), media.GetHeight()
 		downloadable, attachment.MIMEType, attachment.Size = media, media.GetMimetype(), media.GetFileLength()
 	case core.MessageKindAudio:
 		media := message.GetAudioMessage()
+		attachment.DurationSeconds = media.GetSeconds()
 		downloadable, attachment.MIMEType, attachment.Size = media, media.GetMimetype(), media.GetFileLength()
 	case core.MessageKindDocument:
 		media := message.GetDocumentMessage()
 		downloadable, attachment.MIMEType, attachment.FileName, attachment.Size = media, media.GetMimetype(), media.GetFileName(), media.GetFileLength()
 	case core.MessageKindSticker:
 		media := message.GetStickerMessage()
+		attachment.Width, attachment.Height = media.GetWidth(), media.GetHeight()
 		downloadable, attachment.MIMEType, attachment.Size = media, media.GetMimetype(), media.GetFileLength()
 	default:
 		return nil
@@ -116,7 +121,7 @@ func (s *session) downloadMedia(ctx context.Context, source core.MediaSource, fi
 		if err == nil {
 			return nil, checkDecryptedSize(file, maxBytes)
 		}
-		if !errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith404) && !errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith410) {
+		if !errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith403) && !errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith404) && !errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith410) {
 			return nil, err
 		}
 	}

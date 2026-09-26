@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/notborges/convomeow/internal/core"
 )
 
-const messageColumns = `public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at`
+const messageColumns = `public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at, provider_order, local_order`
 
 func (s *Store) SaveMessage(ctx context.Context, m core.Message) (core.Message, error) {
 	if m.AccountID == "" || m.ChatID == "" || m.ProviderMessageID == "" || m.Direction == "" {
@@ -47,8 +48,9 @@ func saveMessageTx(ctx context.Context, tx *sql.Tx, m core.Message) (core.Messag
 		if err == nil {
 			_, err = tx.ExecContext(ctx, `UPDATE messages SET state = CASE WHEN state IN ('queued', 'outcome_unknown') THEN 'sent' ELSE state END,
 sender_id = CASE WHEN sender_id = '' THEN ? ELSE sender_id END,
-occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occurred_at END WHERE public_id = ?`,
-				m.SenderID, dbTime(m.OccurredAt), existingID)
+occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occurred_at END,
+provider_order = COALESCE(?, provider_order) WHERE public_id = ?`,
+				m.SenderID, dbTime(m.OccurredAt), orderValue(m.ProviderOrder), existingID)
 			if err != nil {
 				return core.Message{}, err
 			}
@@ -75,13 +77,14 @@ occurred_at = CASE WHEN state IN ('queued', 'outcome_unknown') THEN ? ELSE occur
 		}
 		m.ConversationID = conversation.ID
 	}
-	_, err := tx.ExecContext(ctx, `INSERT INTO messages(public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	_, err := tx.ExecContext(ctx, `INSERT INTO messages(public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at, provider_order)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(account_id, conversation_id, provider_message_id) DO UPDATE SET
 state = CASE WHEN messages.direction = 'outbound' AND messages.state IN ('queued', 'outcome_unknown') THEN 'sent' ELSE messages.state END,
 sender_id = CASE WHEN messages.sender_id = '' THEN excluded.sender_id ELSE messages.sender_id END,
-text = CASE WHEN messages.text = '' THEN excluded.text ELSE messages.text END`,
-		m.ID, m.AccountID, m.ConversationID, m.ChatID, m.ProviderMessageID, m.Direction, m.State, m.SenderID, m.Kind, m.Text, nullableContent(m.Content), dbTime(m.OccurredAt), dbTime(m.IngestedAt))
+text = CASE WHEN messages.text = '' THEN excluded.text ELSE messages.text END,
+provider_order = COALESCE(excluded.provider_order, messages.provider_order)`,
+		m.ID, m.AccountID, m.ConversationID, m.ChatID, m.ProviderMessageID, m.Direction, m.State, m.SenderID, m.Kind, m.Text, nullableContent(m.Content), dbTime(m.OccurredAt), dbTime(m.IngestedAt), orderValue(m.ProviderOrder))
 	if err != nil {
 		return core.Message{}, normalizeError(err)
 	}
@@ -247,10 +250,23 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 	query := `SELECT ` + messageColumns + ` FROM messages WHERE ` + scope
 	args := []any{scopeID}
 	if before != nil {
-		query += ` AND (occurred_at < ? OR (occurred_at = ? AND public_id < ?))`
-		args = append(args, dbTime(before.Time), dbTime(before.Time), before.ID)
+		order, local := "~", before.LocalOrder
+		if before.ProviderOrder != nil {
+			order = orderValue(before.ProviderOrder).(string)
+		}
+		if local == 0 {
+			err := s.db.QueryRowContext(ctx, `SELECT COALESCE(provider_order, '~'), local_order FROM messages WHERE public_id = ? AND `+scope, before.ID, scopeID).Scan(&order, &local)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, core.ErrInvalid
+			}
+			if err != nil {
+				return nil, err
+			}
+		}
+		query += ` AND (occurred_at, COALESCE(provider_order, '~'), local_order) < (?, ?, ?)`
+		args = append(args, dbTime(before.Time), order, local)
 	}
-	query += ` ORDER BY occurred_at DESC, public_id DESC LIMIT ?`
+	query += ` ORDER BY ` + messageOrder + ` LIMIT ?`
 	args = append(args, limit)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -280,14 +296,21 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 func scanMessage(row interface{ Scan(...any) error }) (core.Message, error) {
 	var m core.Message
 	var kind, occurred, ingested string
-	var content sql.NullString
+	var content, providerOrder sql.NullString
 	err := row.Scan(&m.ID, &m.AccountID, &m.ConversationID, &m.ChatID, &m.ProviderMessageID, &m.Direction, &m.State,
-		&m.SenderID, &kind, &m.Text, &content, &occurred, &ingested)
+		&m.SenderID, &kind, &m.Text, &content, &occurred, &ingested, &providerOrder, &m.LocalOrder)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return m, core.ErrNotFound
 		}
 		return m, err
+	}
+	if providerOrder.Valid {
+		order, err := strconv.ParseUint(providerOrder.String, 10, 64)
+		if err != nil {
+			return m, fmt.Errorf("parse provider message order: %w", err)
+		}
+		m.ProviderOrder = &order
 	}
 	m.Kind = core.MessageKind(kind)
 	if content.Valid {
@@ -302,4 +325,14 @@ func scanMessage(row interface{ Scan(...any) error }) (core.Message, error) {
 		return m, fmt.Errorf("parse message ingested_at: %w", err)
 	}
 	return m, nil
+}
+
+const messageOrder = "occurred_at DESC, COALESCE(provider_order, '~') DESC, local_order DESC"
+
+func orderValue(order *uint64) any {
+	if order == nil {
+		return nil
+	}
+	// Fixed-width decimal preserves the full uint64 range in SQLite's text ordering.
+	return fmt.Sprintf("%020d", *order)
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 9
+const schemaVersion = 12
 
 func (s *Store) initSchema(ctx context.Context) error {
 	var version int
@@ -70,6 +70,8 @@ CREATE TABLE jid_links (
 );
 CREATE TABLE messages (
   public_id TEXT PRIMARY KEY,
+  provider_order TEXT,
+  local_order INTEGER NOT NULL DEFAULT 0,
   account_id TEXT NOT NULL REFERENCES accounts(id),
   conversation_id TEXT NOT NULL REFERENCES conversations(id),
   chat_id TEXT NOT NULL,
@@ -84,10 +86,16 @@ CREATE TABLE messages (
   ingested_at TEXT NOT NULL,
   UNIQUE(account_id, conversation_id, provider_message_id)
 );
-CREATE INDEX messages_account_recent ON messages(account_id, occurred_at DESC, public_id DESC);
-CREATE INDEX messages_conversation_recent ON messages(conversation_id, occurred_at DESC, public_id DESC);
+CREATE TRIGGER messages_local_order AFTER INSERT ON messages BEGIN
+  UPDATE messages SET local_order = NEW.rowid WHERE public_id = NEW.public_id;
+END;
+CREATE INDEX messages_account_recent ON messages(account_id, occurred_at DESC, COALESCE(provider_order, '~') DESC, local_order DESC);
+CREATE INDEX messages_conversation_recent ON messages(conversation_id, occurred_at DESC, COALESCE(provider_order, '~') DESC, local_order DESC);
 CREATE INDEX messages_outbound_provider ON messages(account_id, provider_message_id) WHERE direction = 'outbound';
 CREATE TABLE attachments (
+  duration_seconds INTEGER NOT NULL DEFAULT 0 CHECK (duration_seconds >= 0),
+  width INTEGER NOT NULL DEFAULT 0 CHECK (width >= 0),
+  height INTEGER NOT NULL DEFAULT 0 CHECK (height >= 0),
   id TEXT PRIMARY KEY,
   message_id TEXT NOT NULL REFERENCES messages(public_id),
   part_index INTEGER NOT NULL,
@@ -159,7 +167,7 @@ CREATE INDEX outgoing_media_pending ON outgoing_media_jobs(phase, next_attempt_a
 	if _, err := tx.ExecContext(ctx, schema); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `PRAGMA user_version = 9`); err != nil {
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
 		return err
 	}
 	return tx.Commit()

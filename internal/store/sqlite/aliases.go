@@ -196,6 +196,9 @@ FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targ
 				return err
 			}
 			if targetKeys == 0 && (sourceKeys > 0 || (m.direction == "outbound" && existingDirection != "outbound")) {
+				if err := mergeMessageOrderTx(ctx, tx, m.id, existingID); err != nil {
+					return err
+				}
 				if err := mergeAttachmentsTx(ctx, tx, m.id, existingID); err != nil {
 					return err
 				}
@@ -206,6 +209,9 @@ FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targ
 					return err
 				}
 				continue
+			}
+			if err := mergeMessageOrderTx(ctx, tx, existingID, m.id); err != nil {
+				return err
 			}
 			if err := mergeAttachmentsTx(ctx, tx, existingID, m.id); err != nil {
 				return err
@@ -225,4 +231,10 @@ FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targ
 		return err
 	}
 	return refreshConversationTx(ctx, tx, targetID)
+}
+
+func mergeMessageOrderTx(ctx context.Context, tx *sql.Tx, targetID, sourceID string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE messages SET provider_order = COALESCE(provider_order,
+ (SELECT provider_order FROM messages WHERE public_id = ?)) WHERE public_id = ?`, sourceID, targetID)
+	return err
 }

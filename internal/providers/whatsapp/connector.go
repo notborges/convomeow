@@ -237,6 +237,8 @@ func recipientJID(recipient string) (types.JID, error) {
 
 func translateEvent(emit func(core.Event), evt any) {
 	switch e := evt.(type) {
+	case *events.Contact, *events.PushName, *events.BusinessName:
+		emit(core.Event{Type: core.EventContactsChanged})
 	case *events.PairSuccess:
 		emit(core.Event{Type: core.EventPaired, Identity: e.ID.String()})
 	case *events.Connected:

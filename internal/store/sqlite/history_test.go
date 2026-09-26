@@ -227,3 +227,78 @@ func TestHistoryNewJIDKeepsConversationIDAndUpdatesSendTarget(t *testing.T) {
 		t.Fatalf("new JID created another chat: %+v, %t, %v", linked, created, err)
 	}
 }
+
+func TestHistorySameTimestampOrderReplayAndPagination(t *testing.T) {
+	ctx := context.Background()
+	store, path := historyTestStore(t)
+	at := time.Date(2026, 9, 26, 15, 51, 20, 0, time.UTC)
+	chat := "15550000001@s.whatsapp.net"
+	orders := []uint64{18446744073709551615, 0, 12}
+	ids := []string{"last", "first", "middle"}
+	batch := core.HistoryBatch{AccountID: "account-1", Chat: &core.HistoryChat{ID: chat}}
+	for i := range orders {
+		direction := "inbound"
+		if i == 0 {
+			direction = "outbound"
+		}
+		batch.Messages = append(batch.Messages, core.Message{ChatID: chat, ProviderMessageID: ids[i], Direction: direction, Text: ids[i], OccurredAt: at, ProviderOrder: &orders[i]})
+	}
+	for range 2 {
+		if err := store.ImportHistory(ctx, batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func() {
+		t.Helper()
+		var cursor *core.PageCursor
+		for _, expected := range []string{"last", "middle", "first"} {
+			page, err := store.ListMessages(ctx, "account-1", cursor, 1)
+			if err != nil || len(page) != 1 || page[0].ProviderMessageID != expected {
+				t.Fatalf("page %s: %+v, %v", expected, page, err)
+			}
+			m := page[0]
+			cursor = &core.PageCursor{Time: m.OccurredAt, ID: m.ID, ProviderOrder: m.ProviderOrder, LocalOrder: m.LocalOrder}
+		}
+		page, err := store.ListMessages(ctx, "account-1", cursor, 1)
+		if err != nil || len(page) != 0 {
+			t.Fatal("pagination duplicated messages", err)
+		}
+		chats, err := store.ListConversations(ctx, "account-1", nil, 10)
+		if err != nil || len(chats) != 1 || chats[0].LastMessage.ProviderMessageID != "last" {
+			t.Fatal("incorrect conversation preview", err)
+		}
+	}
+	check()
+	// A live echo without ordering metadata must not erase the imported order.
+	echo := batch.Messages[0]
+	echo.AccountID = "account-1"
+	echo.ProviderOrder = nil
+	if _, err := store.SaveMessage(ctx, echo); err != nil {
+		t.Fatal(err)
+	}
+	check()
+	store.Close()
+	var err error
+	store, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	check()
+}
+
+func TestLiveMessagesWithEqualTimestampsKeepArrivalOrder(t *testing.T) {
+	store, _ := historyTestStore(t)
+	defer store.Close()
+	ctx := context.Background()
+	at := time.Now().UTC()
+	for _, id := range []string{"z", "a"} {
+		if _, err := store.SaveMessage(ctx, core.Message{ID: id, AccountID: "account-1", ChatID: "live", ProviderMessageID: id, Direction: "inbound", OccurredAt: at}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := store.ListMessages(ctx, "account-1", nil, 10)
+	if err != nil || len(page) != 2 || page[0].ID != "a" || page[1].ID != "z" {
+		t.Fatalf("arrival order: %+v %v", page, err)
+	}
+}

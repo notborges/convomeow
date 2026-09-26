@@ -56,6 +56,8 @@ type AccountStatus struct {
 }
 
 type Message struct {
+	ProviderOrder     *uint64         `json:"-"`
+	LocalOrder        int64           `json:"-"`
 	ID                string          `json:"id"`
 	AccountID         string          `json:"account_id"`
 	ConversationID    string          `json:"conversation_id"`
@@ -73,15 +75,18 @@ type Message struct {
 }
 
 type Attachment struct {
-	ID           string      `json:"id"`
-	Index        int         `json:"-"`
-	Kind         MessageKind `json:"kind"`
-	MIMEType     string      `json:"mime_type,omitempty"`
-	FileName     string      `json:"file_name,omitempty"`
-	Size         uint64      `json:"size,omitempty"`
-	Availability string      `json:"availability"`
-	ProviderRef  []byte      `json:"-"`
-	AutoFetch    bool        `json:"-"`
+	ID              string      `json:"id"`
+	Index           int         `json:"-"`
+	Kind            MessageKind `json:"kind"`
+	MIMEType        string      `json:"mime_type,omitempty"`
+	FileName        string      `json:"file_name,omitempty"`
+	Size            uint64      `json:"size,omitempty"`
+	DurationSeconds uint32      `json:"duration_seconds,omitempty"`
+	Width           uint32      `json:"width,omitempty"`
+	Height          uint32      `json:"height,omitempty"`
+	Availability    string      `json:"availability"`
+	ProviderRef     []byte      `json:"-"`
+	AutoFetch       bool        `json:"-"`
 }
 
 type MediaRecord struct {
@@ -96,6 +101,9 @@ type MediaRecord struct {
 	FileName          string
 	DeclaredSize      uint64
 	StoredSize        int64
+	DurationSeconds   uint32
+	Width             uint32
+	Height            uint32
 	Availability      string
 	ProviderRef       []byte `json:"-"`
 	StorageProfileID  string `json:"-"`
@@ -189,8 +197,10 @@ type ConversationTarget struct {
 }
 
 type PageCursor struct {
-	Time time.Time
-	ID   string
+	ProviderOrder *uint64
+	LocalOrder    int64
+	Time          time.Time
+	ID            string
 }
 
 type LoginChallenge struct {
@@ -209,15 +219,16 @@ type LoginStatus struct {
 type EventType string
 
 const (
-	EventConnected     EventType = "connected"
-	EventDisconnected  EventType = "disconnected"
-	EventLoggedOut     EventType = "logged_out"
-	EventPaired        EventType = "paired"
-	EventMessage       EventType = "message"
-	EventHistory       EventType = "history"
-	EventChatProfile   EventType = "chat_profile"
-	EventAvatarChanged EventType = "avatar_changed"
-	EventError         EventType = "error"
+	EventContactsChanged EventType = "contacts_changed"
+	EventConnected       EventType = "connected"
+	EventDisconnected    EventType = "disconnected"
+	EventLoggedOut       EventType = "logged_out"
+	EventPaired          EventType = "paired"
+	EventMessage         EventType = "message"
+	EventHistory         EventType = "history"
+	EventChatProfile     EventType = "chat_profile"
+	EventAvatarChanged   EventType = "avatar_changed"
+	EventError           EventType = "error"
 )
 
 type Event struct {
@@ -300,6 +311,7 @@ type Repository interface {
 	GetMedia(ctx context.Context, attachmentID string) (MediaRecord, error)
 	ListPendingMedia(ctx context.Context, now time.Time, limit int) ([]string, error)
 	StoredMediaBytes(ctx context.Context) (int64, error)
+	SetMediaDimensions(ctx context.Context, attachmentID string, width, height uint32) error
 	MarkMediaReady(ctx context.Context, attachmentID, profileID, key string, size int64, sha256 []byte) error
 	MarkMediaRemote(ctx context.Context, attachmentID string, version int64) error
 	MarkMediaUnavailable(ctx context.Context, attachmentID string) error
@@ -364,4 +376,8 @@ type OutgoingMedia struct {
 	Caption  string
 	Width    uint32
 	Height   uint32
+}
+
+type HistoryRequester interface {
+	RequestHistory(ctx context.Context, before Message, count int) (string, error)
 }

@@ -233,7 +233,7 @@ WHERE id = ?`, profile.Kind, profile.DisplayName, profile.Description, conversat
 
 func refreshConversationTx(ctx context.Context, tx *sql.Tx, conversationID string) error {
 	var messageID, occurredAt string
-	err := tx.QueryRowContext(ctx, `SELECT public_id, occurred_at FROM messages WHERE conversation_id = ? ORDER BY occurred_at DESC, public_id DESC LIMIT 1`, conversationID).Scan(&messageID, &occurredAt)
+	err := tx.QueryRowContext(ctx, `SELECT public_id, occurred_at FROM messages WHERE conversation_id = ? ORDER BY `+messageOrder+` LIMIT 1`, conversationID).Scan(&messageID, &occurredAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

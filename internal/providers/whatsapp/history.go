@@ -56,6 +56,7 @@ func (s *session) importHistory(event *events.HistorySync) {
 				skipped++
 				continue
 			}
+			message.ProviderOrder = item.MsgOrderID
 			batch.Messages = append(batch.Messages, *message)
 			messageCount++
 			if len(batch.Messages) == historyBatchSize {
@@ -65,7 +66,7 @@ func (s *session) importHistory(event *events.HistorySync) {
 				batch = core.HistoryBatch{Chat: &chat, Messages: make([]core.Message, 0, historyBatchSize)}
 			}
 		}
-		if len(batch.Messages) > 0 || (!sentBatch && !chat.LastActivityAt.IsZero()) {
+		if len(batch.Messages) > 0 || (!sentBatch && !chat.LastActivityAt.IsZero() && !isAnnouncementChat(chatJID)) {
 			ready := batch
 			s.emit(core.Event{Type: core.EventHistory, History: &ready})
 		}
@@ -113,11 +114,19 @@ func historyChat(conversation *waHistorySync.Conversation) (core.HistoryChat, ty
 		if chat.DisplayName == "" && primary.Server == types.DefaultUserServer {
 			chat.DisplayName = "+" + primary.User
 		}
+		if isAnnouncementChat(primary) {
+			chat.DisplayName = "WhatsApp"
+		}
 	}
 	if newest, ok := historyJID(conversation.GetNewJID()); ok {
 		chat.PreferredID = newest.String()
 	}
 	return chat, primary, true
+}
+
+func isAnnouncementChat(jid types.JID) bool {
+	jid = jid.ToNonAD()
+	return jid == types.PSAJID || jid == types.LegacyPSAJID
 }
 
 func historyJID(value string) (types.JID, bool) {
@@ -127,6 +136,9 @@ func historyJID(value string) (types.JID, bool) {
 	jid, err := types.ParseJID(value)
 	if err != nil || jid.IsEmpty() {
 		return types.JID{}, false
+	}
+	if jid.ToNonAD() == types.LegacyPSAJID {
+		return types.PSAJID, true
 	}
 	return jid.ToNonAD(), true
 }

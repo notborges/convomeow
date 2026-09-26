@@ -32,9 +32,11 @@ func TestHistorySyncUsesWhatsmeowParserAndBoundsBatches(t *testing.T) {
 	at := uint64(time.Date(2025, 7, 8, 9, 10, 11, 0, time.UTC).Unix())
 	conversation := &waHistorySync.Conversation{ID: proto.String(pn), LidJID: proto.String(lid), LastMsgTimestamp: proto.Uint64(at + 101)}
 	for i := range 101 {
-		conversation.Messages = append(conversation.Messages, historyText(pn, fmt.Sprintf("text-%d", i), at+uint64(i)))
+		item := historyText(pn, fmt.Sprintf("text-%d", i), at+uint64(i))
+		item.MsgOrderID = proto.Uint64(uint64(i))
+		conversation.Messages = append(conversation.Messages, item)
 	}
-	image := &waE2E.ImageMessage{Mimetype: proto.String("image/jpeg"), FileLength: proto.Uint64(1234),
+	image := &waE2E.ImageMessage{Width: proto.Uint32(600), Height: proto.Uint32(900), Mimetype: proto.String("image/jpeg"), FileLength: proto.Uint64(1234),
 		Caption: proto.String("photo"), DirectPath: proto.String("/media/path"), MediaKey: []byte("private-key"),
 		FileSHA256: make([]byte, 32), FileEncSHA256: make([]byte, 32)}
 	conversation.Messages = append(conversation.Messages, &waHistorySync.HistorySyncMsg{Message: &waWeb.WebMessageInfo{
@@ -53,12 +55,15 @@ func TestHistorySyncUsesWhatsmeowParserAndBoundsBatches(t *testing.T) {
 	if emitted[1].History.Chat.ID != pn || len(emitted[1].History.Chat.Aliases) != 1 || emitted[1].History.Chat.Aliases[0] != lid {
 		t.Fatalf("chat aliases: %+v", emitted[1].History.Chat)
 	}
+	if order := emitted[1].History.Messages[0].ProviderOrder; order == nil || *order != 0 {
+		t.Fatal("history order was discarded")
+	}
 	message := emitted[2].History.Messages[1]
 	if message.Kind != core.MessageKindImage || message.Text != "photo" || len(message.Attachments) != 1 {
 		t.Fatalf("media translation: %+v", message)
 	}
 	attachment := message.Attachments[0]
-	if attachment.MIMEType != "image/jpeg" || attachment.Size != 1234 || attachment.Availability != "remote" {
+	if attachment.Width != 600 || attachment.Height != 900 || attachment.MIMEType != "image/jpeg" || attachment.Size != 1234 || attachment.Availability != "remote" {
 		t.Fatalf("media metadata: %+v", attachment)
 	}
 	var ref mediaReference
@@ -123,4 +128,30 @@ func TestLoggedOutSessionStopsHistoryWorker(t *testing.T) {
 		t.Fatal("history worker did not stop after logout")
 	}
 	s.Close()
+}
+
+func TestHistoryAnnouncementsRequireMessages(t *testing.T) {
+	for _, jid := range []string{"0@s.whatsapp.net", "0@c.us"} {
+		t.Run(jid, func(t *testing.T) {
+			var emitted []core.Event
+			s := &session{client: whatsmeow.NewClient(&store.Device{}, nil), emit: func(event core.Event) { emitted = append(emitted, event) }}
+			at := uint64(time.Date(2025, 8, 9, 10, 11, 12, 0, time.UTC).Unix())
+			conversation := &waHistorySync.Conversation{ID: proto.String(jid), ConversationTimestamp: proto.Uint64(at)}
+			event := &events.HistorySync{Data: &waHistorySync.HistorySync{Conversations: []*waHistorySync.Conversation{conversation}}}
+			s.importHistory(event)
+			if len(emitted) != 0 {
+				t.Fatal("empty announcement conversation was imported")
+			}
+			conversation.Messages = []*waHistorySync.HistorySyncMsg{{}}
+			s.importHistory(event)
+			if len(emitted) != 0 {
+				t.Fatal("announcement conversation with no usable messages was imported")
+			}
+			conversation.Messages = []*waHistorySync.HistorySyncMsg{historyText(jid, "announcement", at)}
+			s.importHistory(event)
+			if len(emitted) != 1 || emitted[0].History.Chat.DisplayName != "WhatsApp" || len(emitted[0].History.Messages) != 1 {
+				t.Fatalf("announcement message not preserved with its service name: %+v", emitted)
+			}
+		})
+	}
 }

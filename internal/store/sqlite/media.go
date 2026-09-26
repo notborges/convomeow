@@ -16,12 +16,12 @@ func (s *Store) GetMedia(ctx context.Context, attachmentID string) (core.MediaRe
 	var profile, key sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT a.id, m.account_id, m.chat_id, m.provider_message_id, m.direction, m.sender_id,
 a.kind, a.mime_type, a.file_name, a.size, a.stored_size, a.availability, a.provider_ref,
-a.storage_profile_id, a.object_key, a.media_version, a.attempt_count, a.failure_code, a.required_bytes
+a.storage_profile_id, a.object_key, a.media_version, a.attempt_count, a.failure_code, a.required_bytes, a.width, a.height, a.duration_seconds
 FROM attachments a JOIN messages m ON m.public_id = a.message_id WHERE a.id = ?`, attachmentID).
 		Scan(&media.AttachmentID, &media.AccountID, &media.ChatID, &media.ProviderMessageID, &media.Direction,
 			&media.SenderID, &media.Kind, &media.MIMEType, &media.FileName, &declared, &stored,
 			&media.Availability, &media.ProviderRef, &profile, &key, &media.Version, &media.AttemptCount,
-			&media.FailureCode, &media.RequiredBytes)
+			&media.FailureCode, &media.RequiredBytes, &media.Width, &media.Height, &media.DurationSeconds)
 	if errors.Is(err, sql.ErrNoRows) {
 		return core.MediaRecord{}, core.ErrNotFound
 	}
@@ -178,4 +178,15 @@ func (s *Store) ListMediaOrphans(ctx context.Context, limit int) ([]core.MediaOb
 func (s *Store) ClearMediaOrphan(ctx context.Context, object core.MediaObject) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM media_orphans WHERE profile_id = ? AND object_key = ?`, object.ProfileID, object.Key)
 	return err
+}
+
+func (s *Store) SetMediaDimensions(ctx context.Context, attachmentID string, width, height uint32) error {
+	if width == 0 || height == 0 {
+		return core.ErrInvalid
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE attachments SET width = ?, height = ? WHERE id = ?`, width, height, attachmentID)
+	if err != nil {
+		return err
+	}
+	return requireAffected(result)
 }
