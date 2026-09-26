@@ -68,6 +68,8 @@ func TestAttachmentDownloadAndRanges(t *testing.T) {
 	defer server.Close()
 	path := server.URL + "/api/v1/attachments/" + id
 	content := path + "/content"
+	changes, unsubscribe := service.Subscribe()
+	defer unsubscribe()
 
 	unauthorized, err := server.Client().Get(content)
 	if err != nil {
@@ -91,7 +93,7 @@ func TestAttachmentDownloadAndRanges(t *testing.T) {
 	first := request(t, server.Client(), http.MethodGet, content, nil, "")
 	firstData, _ := io.ReadAll(first.Body)
 	first.Body.Close()
-	if first.StatusCode != http.StatusAccepted || first.Header.Get("Retry-After") == "" || strings.Contains(string(firstData), "private-ref") {
+	if first.StatusCode != http.StatusAccepted || first.Header.Get("Cache-Control") != "private, no-store" || first.Header.Get("Retry-After") == "" || strings.Contains(string(firstData), "private-ref") {
 		t.Fatalf("remote GET: status=%d body=%s", first.StatusCode, firstData)
 	}
 	waitFor(t, func() bool { return connector.mediaDownloads.Load() == 1 })
@@ -105,12 +107,41 @@ func TestAttachmentDownloadAndRanges(t *testing.T) {
 		record, err := repo.GetMedia(ctx, id)
 		return err == nil && record.Availability == "ready"
 	})
+	select {
+	case change := <-changes:
+		if change.Type != app.AttachmentChanged || change.AttachmentID != id {
+			t.Fatalf("media notification: %+v", change)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("media completion did not notify clients")
+	}
 	full := request(t, server.Client(), http.MethodGet, content, nil, "")
 	fullData, _ := io.ReadAll(full.Body)
 	full.Body.Close()
 	if full.StatusCode != http.StatusOK || string(fullData) != "0123456789" || full.Header.Get("Content-Type") != "image/jpeg" ||
-		full.Header.Get("Cache-Control") != "private, no-store" || full.Header.Get("X-Content-Type-Options") != "nosniff" {
+		full.Header.Get("Cache-Control") != "private, max-age=86400" || full.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("ready content: status=%d headers=%v body=%q", full.StatusCode, full.Header, fullData)
+	}
+	etag := full.Header.Get("ETag")
+	if etag == "" || !strings.Contains(full.Header.Get("Vary"), "Cookie") || !strings.Contains(full.Header.Get("Vary"), "Authorization") {
+		t.Fatal("missing private cache validators")
+	}
+	for _, token := range []string{"test-token", "invalid"} {
+		cachedReq, _ := http.NewRequest(http.MethodGet, content, nil)
+		cachedReq.Header.Set("Authorization", "Bearer "+token)
+		cachedReq.Header.Set("If-None-Match", etag)
+		cached, err := server.Client().Do(cachedReq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := io.ReadAll(cached.Body)
+		cached.Body.Close()
+		if token == "test-token" && (cached.StatusCode != http.StatusNotModified || len(data) != 0) {
+			t.Fatal("cached media was retransmitted")
+		}
+		if token == "invalid" && cached.StatusCode != http.StatusUnauthorized {
+			t.Fatal("cache validation bypassed authentication")
+		}
 	}
 	rangeReq, _ := http.NewRequest(http.MethodGet, content, nil)
 	rangeReq.Header.Set("Authorization", "Bearer test-token")

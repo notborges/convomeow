@@ -7,6 +7,7 @@ import (
 )
 
 type accountResponse struct {
+	AvatarURL        string    `json:"avatar_url"`
 	ID               string    `json:"id"`
 	Provider         string    `json:"provider"`
 	ConnectionKind   string    `json:"connection_kind"`
@@ -20,7 +21,7 @@ type accountResponse struct {
 }
 
 func accountFromCore(a core.AccountStatus) accountResponse {
-	return accountResponse{ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
+	return accountResponse{AvatarURL: "/api/v1/accounts/" + a.ID + "/avatar", ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
 		Capabilities: []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
@@ -41,12 +42,16 @@ type messageResponse struct {
 }
 
 type attachmentResponse struct {
-	ID           string `json:"id"`
-	Kind         string `json:"kind"`
-	MIMEType     string `json:"mime_type,omitempty"`
-	FileName     string `json:"file_name,omitempty"`
-	Size         uint64 `json:"size,omitempty"`
-	Availability string `json:"availability"`
+	DurationSeconds uint32 `json:"duration_seconds,omitempty"`
+	Width           uint32 `json:"width,omitempty"`
+	Height          uint32 `json:"height,omitempty"`
+	AttemptCount    int    `json:"attempt_count,omitempty"`
+	ID              string `json:"id"`
+	Kind            string `json:"kind"`
+	MIMEType        string `json:"mime_type,omitempty"`
+	FileName        string `json:"file_name,omitempty"`
+	Size            uint64 `json:"size,omitempty"`
+	Availability    string `json:"availability"`
 }
 
 func messageFromCore(m core.Message) messageResponse {
@@ -59,7 +64,7 @@ func messageFromCore(m core.Message) messageResponse {
 	attachments := make([]attachmentResponse, 0, len(m.Attachments))
 	for _, attachment := range m.Attachments {
 		attachments = append(attachments, attachmentResponse{ID: attachment.ID, Kind: string(attachment.Kind),
-			MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
+			DurationSeconds: attachment.DurationSeconds, Width: attachment.Width, Height: attachment.Height, MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
 	}
 	return messageResponse{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
@@ -72,7 +77,7 @@ func attachmentFromRecord(record core.MediaRecord) attachmentResponse {
 		size = uint64(record.StoredSize)
 	}
 	return attachmentResponse{ID: record.AttachmentID, Kind: string(record.Kind), MIMEType: record.MIMEType,
-		FileName: record.FileName, Size: size, Availability: record.Availability}
+		DurationSeconds: record.DurationSeconds, Width: record.Width, Height: record.Height, FileName: record.FileName, Size: size, Availability: record.Availability, AttemptCount: record.AttemptCount}
 }
 
 type conversationResponse struct {

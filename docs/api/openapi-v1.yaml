@@ -8,6 +8,22 @@ info:
 security:
   - bearerToken: []
 paths:
+  /api/v1/events:
+    get:
+      operationId: streamEvents
+      summary: Subscribe to live resource changes
+      description: >-
+        Upgrade to WebSocket with the existing browser session or bearer token.
+        The stream sends a ready frame, then resource-change notifications.
+        Refresh HTTP data after every connection; notifications are not replayed.
+        See realtime.md for message types and connection lifecycle.
+      responses:
+        '101':
+          description: WebSocket connection established.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WebSocket origin is not allowed.
   /healthz:
     get:
       operationId: getHealth
@@ -313,6 +329,43 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/avatar:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: getAccountAvatar
+      summary: Read the account's own profile photo
+      description: Returns a saved preview while the account is disconnected. A missing photo requires a connected account to fetch it.
+      responses:
+        '200':
+          description: Profile photo preview.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          description: Profile photo could not be fetched from the provider.
+        '503':
+          description: Saved media is unavailable or staging is busy.
+        '507':
+          description: Media storage limit reached.
   /api/v1/accounts/{id}/contacts/{provider_id}/avatar:
     parameters:
       - $ref: '#/components/parameters/AccountID'
@@ -428,6 +481,53 @@ paths:
           description: Saved media is unavailable or staging is busy.
         '507':
           description: Media storage limit reached.
+  /api/v1/conversations/{id}/history-requests:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    post:
+      operationId: requestConversationHistory
+      summary: Request earlier messages from the provider
+      description: Requests up to 50 messages before a saved, confirmed message. Provider responses merge into the conversation asynchronously. Acceptance does not guarantee delivery or complete history; the primary device may need to be online.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [before_message_id]
+              properties:
+                before_message_id:
+                  type: string
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  default: 50
+      responses:
+        '202':
+          description: History request sent to the provider.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request_id, status]
+                properties:
+                  request_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [requested]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          description: History request failed.
+
   /api/v1/conversations/{id}/messages:
     parameters:
       - $ref: '#/components/parameters/ConversationID'
@@ -584,14 +684,26 @@ paths:
     get:
       operationId: getAttachmentContent
       summary: Download an attachment
-      description: A remote file starts a background download. Poll this route after a 202 response.
+      description: A remote file starts a background download. Poll this route after a 202 response. Stored files use private browser caching for one day, vary by authentication, and support ETag revalidation.
       parameters:
         - name: Range
           in: header
           schema:
             type: string
           description: One byte range, such as bytes=0-1023.
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+          description: ETag from a previously downloaded file.
+        - name: If-Range
+          in: header
+          schema:
+            type: string
+          description: Apply the range only if this ETag still matches; otherwise return the full file.
       responses:
+        '304':
+          description: The cached file is unchanged.
         '200':
           description: Full file from the configured storage profile.
           content:
@@ -635,6 +747,8 @@ paths:
       responses:
         '200':
           description: Stored file is ready.
+        '304':
+          description: The cached file is unchanged.
         '206':
           description: Stored byte range is ready.
         '202':
@@ -772,6 +886,9 @@ components:
           type: string
         label:
           type: string
+        avatar_url:
+          type: string
+          description: URL for the account's profile photo; requires a paired account.
         provider_identity:
           type: string
         state:
@@ -1007,6 +1124,22 @@ components:
       type: object
       required: [id, kind, availability]
       properties:
+        duration_seconds:
+          type: integer
+          minimum: 1
+          description: Audio or video duration in seconds, when known.
+        width:
+          type: integer
+          minimum: 1
+          description: Media width in pixels, when known.
+        height:
+          type: integer
+          minimum: 1
+          description: Media height in pixels, when known.
+        attempt_count:
+          type: integer
+          minimum: 0
+          description: Failed download attempts. Available when reading attachment metadata. A remote file with failed attempts may be waiting for a retry.
         id:
           type: string
         kind:

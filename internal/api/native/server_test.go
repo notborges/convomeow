@@ -25,6 +25,7 @@ import (
 )
 
 type fakeConnector struct {
+	historyRequests chan core.Message
 	nextID          atomic.Int64
 	sends           atomic.Int64
 	failSend        atomic.Bool
@@ -451,4 +452,11 @@ func TestHistoryMessagesUseProviderTimeAndHideMediaKeys(t *testing.T) {
 		bytes.Contains(data, []byte("media_key")) || !bytes.Contains(data, []byte(`"availability":"remote"`)) {
 		t.Fatalf("media metadata or key exposure: %s", data)
 	}
+}
+
+func (s *fakeSession) RequestHistory(_ context.Context, before core.Message, _ int) (string, error) {
+	if s.connector.historyRequests != nil {
+		s.connector.historyRequests <- before
+	}
+	return "history-request", nil
 }

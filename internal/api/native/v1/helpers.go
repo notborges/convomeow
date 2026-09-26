@@ -34,16 +34,21 @@ func requestID(r *http.Request) string {
 	return id
 }
 
-func authenticate(token string, next http.Handler) http.Handler {
+func authenticate(token string, browserAuth func(*http.Request) bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		const prefix = "Bearer "
-		authorization := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authorization, prefix) || subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(authorization, prefix)), []byte(token)) != 1 {
+		if !authorized(token, browserAuth, r) {
 			writeProblem(w, r, http.StatusUnauthorized, "unauthorized", "Valid bearer token required.")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func authorized(token string, browserAuth func(*http.Request) bool, r *http.Request) bool {
+	const prefix = "Bearer "
+	authorization := r.Header.Get("Authorization")
+	bearer := strings.HasPrefix(authorization, prefix) && subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(authorization, prefix)), []byte(token)) == 1
+	return bearer || browserAuth != nil && browserAuth(r)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
@@ -152,8 +157,10 @@ func parsePage(w http.ResponseWriter, r *http.Request) (int, *core.PageCursor, b
 }
 
 type cursorValue struct {
-	At string `json:"at"`
-	ID string `json:"id"`
+	ProviderOrder *uint64 `json:"order,omitempty"`
+	LocalOrder    int64   `json:"seq,omitempty"`
+	At            string  `json:"at"`
+	ID            string  `json:"id"`
 }
 
 func decodeCursor(raw string) (*core.PageCursor, error) {
@@ -178,10 +185,19 @@ func decodeCursor(raw string) (*core.PageCursor, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &core.PageCursor{Time: at, ID: value.ID}, nil
+	if value.LocalOrder < 0 {
+		return nil, core.ErrInvalid
+	}
+	return &core.PageCursor{Time: at, ID: value.ID, ProviderOrder: value.ProviderOrder, LocalOrder: value.LocalOrder}, nil
 }
 
 func encodeCursor(at time.Time, id string) string {
 	data, _ := json.Marshal(cursorValue{At: at.UTC().Format(time.RFC3339Nano), ID: id})
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func encodeMessageCursor(message core.Message) string {
+	data, _ := json.Marshal(cursorValue{At: message.OccurredAt.UTC().Format(time.RFC3339Nano), ID: message.ID,
+		ProviderOrder: message.ProviderOrder, LocalOrder: message.LocalOrder})
 	return base64.RawURLEncoding.EncodeToString(data)
 }

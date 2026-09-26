@@ -163,6 +163,7 @@ func (s *Service) processMedia(id string) {
 	if err != nil || record.Availability != "remote" {
 		return
 	}
+	defer s.notifyMediaIfChanged(record)
 	if len(record.ProviderRef) == 0 {
 		s.mediaFailure(record, "reference", core.ErrMediaUnavailable)
 		return
@@ -245,6 +246,19 @@ func (s *Service) processMedia(id string) {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		s.mediaFailure(record, "staging", err)
 		return
+	}
+	if (record.Width == 0 || record.Height == 0) && (record.Kind == core.MessageKindImage || record.Kind == core.MessageKindSticker) {
+		width, height := imageDimensions(file)
+		if width > 0 && height > 0 {
+			if err := s.repo.SetMediaDimensions(ctx, id, width, height); err != nil {
+				s.mediaFailure(record, "dimensions", err)
+				return
+			}
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			s.mediaFailure(record, "staging", err)
+			return
+		}
 	}
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -380,6 +394,7 @@ func (s *Service) OpenMedia(ctx context.Context, id string, offset, length int64
 			if err := s.repo.MarkMediaUnavailable(ctx, id); err != nil {
 				return nil, record, false, err
 			}
+			s.publish(Notification{Type: AttachmentChanged, AccountID: record.AccountID, AttachmentID: id})
 			return nil, record, false, core.ErrMediaUnavailable
 		}
 		if err := s.repo.MarkMediaRemote(ctx, id, record.Version); err != nil {
@@ -389,6 +404,7 @@ func (s *Service) OpenMedia(ctx context.Context, id string, offset, length int64
 			return nil, record, false, err
 		}
 		record.Availability = "remote"
+		s.publish(Notification{Type: AttachmentChanged, AccountID: record.AccountID, AttachmentID: id})
 	}
 	if !fetch {
 		return nil, record, true, nil
@@ -424,6 +440,7 @@ func (s *Service) OpenMedia(ctx context.Context, id string, offset, length int64
 		if err := s.repo.ClearMediaBlock(ctx, id); err != nil {
 			return nil, record, false, err
 		}
+		s.publish(Notification{Type: AttachmentChanged, AccountID: record.AccountID, AttachmentID: id})
 	}
 	rt, err := s.runtime(record.AccountID)
 	if err != nil {

@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.3
+	github.com/coder/websocket v1.8.15
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.52
@@ -33,7 +34,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
 	github.com/aws/smithy-go v1.28.1 // indirect
 	github.com/beeper/argo-go v1.1.2 // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/elliotchance/orderedmap/v3 v3.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

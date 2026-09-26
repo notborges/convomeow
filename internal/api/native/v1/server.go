@@ -12,14 +12,18 @@ import (
 )
 
 type Server struct {
-	service *app.Service
+	authorized func(*http.Request) bool
+	service    *app.Service
 }
 
-func New(service *app.Service, token string) http.Handler {
-	s := &Server{service: service}
+func New(service *app.Service, token string, browserAuth func(*http.Request) bool) http.Handler {
+	s := &Server{service: service, authorized: func(r *http.Request) bool { return authorized(token, browserAuth, r) }}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/events", s.events)
+	register(mux, "/api/v1/conversations/{id}/history-requests", map[string]http.HandlerFunc{"POST": s.requestHistory})
 	register(mux, "/api/v1/accounts", map[string]http.HandlerFunc{"GET": s.listAccounts, "POST": s.createAccount})
 	register(mux, "/api/v1/accounts/{id}", map[string]http.HandlerFunc{"GET": s.getAccount})
+	register(mux, "/api/v1/accounts/{id}/avatar", map[string]http.HandlerFunc{"GET": s.getAccountAvatar})
 	register(mux, "/api/v1/accounts/{id}/login-attempts", map[string]http.HandlerFunc{"POST": s.startLogin})
 	register(mux, "/api/v1/accounts/{id}/login-attempts/{attempt_id}", map[string]http.HandlerFunc{"GET": s.getLogin})
 	register(mux, "/api/v1/accounts/{id}/conversations", map[string]http.HandlerFunc{"POST": s.createConversation})
@@ -39,7 +43,7 @@ func New(service *app.Service, token string) http.Handler {
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found.")
 	})
-	return withRequestID(authenticate(token, mux))
+	return withRequestID(authenticate(token, browserAuth, mux))
 }
 
 func register(mux *http.ServeMux, pattern string, handlers map[string]http.HandlerFunc) {
@@ -264,7 +268,7 @@ func writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int
 	if len(messages) > limit {
 		messages = messages[:limit]
 		last := messages[len(messages)-1]
-		next = encodeCursor(last.OccurredAt, last.ID)
+		next = encodeMessageCursor(last)
 	}
 	items := make([]messageResponse, 0, len(messages))
 	for _, message := range messages {

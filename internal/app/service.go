@@ -30,9 +30,10 @@ type runtimeAccount struct {
 }
 
 type Service struct {
-	repo      core.Repository
-	connector core.Connector
-	logger    *slog.Logger
+	notifications notifications
+	repo          core.Repository
+	connector     core.Connector
+	logger        *slog.Logger
 
 	mu       sync.RWMutex
 	accounts map[string]*runtimeAccount
@@ -97,6 +98,7 @@ func (s *Service) Start(ctx context.Context) error {
 		session, err := s.connector.Open(ctx, account.ProviderIdentity, func(event core.Event) { s.onEvent(account.ID, 1, event) })
 		if err != nil {
 			rt.setError(fmt.Errorf("restore session: %w", err))
+			s.publish(Notification{Type: AccountsChanged, AccountID: account.ID})
 			continue
 		}
 		rt.mu.Lock()
@@ -107,6 +109,7 @@ func (s *Service) Start(ctx context.Context) error {
 			defer s.workWG.Done()
 			if err := session.Connect(); err != nil {
 				rt.setError(err)
+				s.publish(Notification{Type: AccountsChanged, AccountID: id})
 				s.logger.Error("connect failed", "account_id", id, "error", err)
 			}
 		}(account.ID, session, rt)
@@ -115,6 +118,7 @@ func (s *Service) Start(ctx context.Context) error {
 }
 
 func (s *Service) Close() error {
+	s.closeNotifications()
 	s.cancel()
 	s.mu.RLock()
 	var sessions []core.Session
@@ -160,6 +164,7 @@ func (s *Service) CreateAccount(ctx context.Context, label, provider, connection
 	s.mu.Lock()
 	s.accounts[a.ID] = &runtimeAccount{account: a, state: "needs_login", loginState: "idle"}
 	s.mu.Unlock()
+	s.publish(Notification{Type: AccountsChanged, AccountID: a.ID})
 	return core.AccountStatus{Account: a, State: "needs_login"}, nil
 }
 
@@ -263,13 +268,16 @@ func (s *Service) StartLogin(id string) (core.LoginStatus, error) {
 				rt.loginState = "challenge_available"
 			}
 			rt.mu.Unlock()
+			s.publish(Notification{Type: AccountsChanged, AccountID: id})
 		})
 		s.finishLogin(id, rt, session, err)
 	}()
+	s.publish(Notification{Type: AccountsChanged, AccountID: id})
 	return core.LoginStatus{ID: attemptID, State: "waiting_for_challenge"}, nil
 }
 
 func (s *Service) finishLogin(id string, rt *runtimeAccount, session core.Session, loginErr error) {
+	defer s.publish(Notification{Type: AccountsChanged, AccountID: id})
 	s.loginMu.Lock()
 	if s.activeLogin == id {
 		s.activeLogin = ""
@@ -363,6 +371,7 @@ func (s *Service) CreateConversation(ctx context.Context, accountID string, targ
 		conversation.DisplayName = name
 	}
 	s.enrichConversation(ctx, &conversation)
+	s.notifyConversation(accountID, conversation.ID)
 	return conversation, created, nil
 }
 
@@ -485,6 +494,7 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	if err != nil || !created {
 		return reserved, err
 	}
+	s.notifyConversation(reserved.AccountID, reserved.ConversationID)
 	sent, sendErr := session.SendText(ctx, prepared, text)
 	result := "sent"
 	if sendErr != nil {
@@ -503,6 +513,7 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	if err != nil {
 		return reserved, fmt.Errorf("record send result for message %s: %w", reserved.ID, err)
 	}
+	s.notifyConversation(completed.AccountID, completed.ConversationID)
 	return completed, nil
 }
 
@@ -602,6 +613,10 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		return
 	}
 	switch event.Type {
+	case core.EventPaired, core.EventConnected, core.EventDisconnected, core.EventLoggedOut, core.EventError:
+		defer s.publish(Notification{Type: AccountsChanged, AccountID: id})
+	}
+	switch event.Type {
 	case core.EventPaired:
 		if err := s.persistIdentity(id, event.Identity); err != nil {
 			rt.setError(err)
@@ -668,6 +683,7 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 			s.logger.Error("fail pending media sends after logout", "account_id", id, "error", err)
 		}
 		s.scanPendingMedia()
+		s.notifyConversation(id, "")
 	case core.EventError:
 		if event.Err != nil {
 			rt.setError(event.Err)
@@ -686,6 +702,7 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 			s.logger.Error("save incoming message failed", "account_id", id, "error", err)
 			return
 		}
+		s.notifyConversation(saved.AccountID, saved.ConversationID)
 		for _, attachment := range saved.Attachments {
 			if attachment.Availability == "remote" {
 				s.queueMedia(attachment.ID)
@@ -699,6 +716,8 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		batch.AccountID = id
 		if err := s.repo.ImportHistory(context.Background(), batch); err != nil {
 			s.logger.Error("import history batch failed", "account_id", id, "message_count", len(batch.Messages), "error", err)
+		} else {
+			s.notifyConversation(id, "")
 		}
 	case core.EventChatProfile:
 		if event.Profile == nil {
@@ -708,10 +727,14 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		defer cancel()
 		if err := s.repo.UpdateChatProfile(ctx, id, *event.Profile); err != nil {
 			s.logger.Warn("update chat profile failed", "account_id", id, "error", err)
+		} else {
+			s.notifyConversation(id, "")
 		}
 		if s.avatars.queue != nil && (event.Profile.Kind == "group" || event.Profile.Kind == "direct") {
 			s.queueAvatarIfDue(ctx, id, event.Profile.ProviderChatID)
 		}
+	case core.EventContactsChanged:
+		s.publish(Notification{Type: ContactsChanged, AccountID: id})
 	case core.EventAvatarChanged:
 		if event.AvatarID == "" {
 			return

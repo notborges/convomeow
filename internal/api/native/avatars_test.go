@@ -240,3 +240,41 @@ func TestAvatarRemovalDuringRefreshDoesNotServeOldPhoto(t *testing.T) {
 		t.Fatal("refresh did not finish")
 	}
 }
+
+func TestAccountAvatarWithoutSelfContactAndOfflineCache(t *testing.T) {
+	root := t.TempDir()
+	dbPath, mediaPath := filepath.Join(root, "app.sqlite"), filepath.Join(root, "media")
+	accountID := uuid.NewString()
+	createAvatarTestAccount(t, dbPath, accountID)
+	photo := []byte("own-profile-photo")
+	connector := &fakeConnector{avatar: core.Avatar{ContentType: "image/png", Data: photo, PictureID: "self-1"}}
+	service, _ := avatarTestService(t, dbPath, mediaPath, connector)
+	server := httptest.NewServer(native.New(service, "test-token"))
+	read := func(server *httptest.Server) {
+		t.Helper()
+		response := request(t, server.Client(), http.MethodGet, server.URL+"/api/v1/accounts/"+accountID+"/avatar", nil, "")
+		defer response.Body.Close()
+		data, err := io.ReadAll(response.Body)
+		if err != nil || response.StatusCode != http.StatusOK || !bytes.Equal(data, photo) {
+			t.Fatalf("own avatar: status=%d error=%v", response.StatusCode, err)
+		}
+	}
+	read(server)
+	read(server)
+	server.Close()
+	if err := service.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if connector.avatarFetches.Load() != 1 {
+		t.Fatal("own avatar did not reuse cache")
+	}
+	offline := &fakeConnector{offline: true}
+	service, _ = avatarTestService(t, dbPath, mediaPath, offline)
+	defer service.Close()
+	server = httptest.NewServer(native.New(service, "test-token"))
+	defer server.Close()
+	read(server)
+	if offline.avatarFetches.Load() != 0 {
+		t.Fatal("offline read fetched an avatar")
+	}
+}

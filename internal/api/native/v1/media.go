@@ -29,10 +29,16 @@ func (s *Server) getAttachmentContent(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
+	etag := fmt.Sprintf(`"%s-%d"`, record.AttachmentID, record.Version)
+	if record.Availability == "ready" && matchesMediaETag(r.Header.Get("If-None-Match"), etag) {
+		cacheMedia(w, etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
 	var offset, length int64
 	length = -1
 	partial := false
-	if record.Availability == "ready" && r.Header.Get("Range") != "" {
+	if record.Availability == "ready" && r.Header.Get("Range") != "" && (r.Header.Get("If-Range") == "" || r.Header.Get("If-Range") == etag) {
 		offset, length, err = parseMediaRange(r.Header.Get("Range"), record.StoredSize)
 		if err != nil {
 			w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", record.StoredSize))
@@ -56,6 +62,7 @@ func (s *Server) getAttachmentContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer reader.Close()
+	cacheMedia(w, fmt.Sprintf(`"%s-%d"`, current.AttachmentID, current.Version))
 	contentType, disposition := mediaHeaders(current)
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", disposition)
@@ -142,4 +149,20 @@ func safeMediaFilename(name string) string {
 		return "attachment"
 	}
 	return name
+}
+
+func cacheMedia(w http.ResponseWriter, etag string) {
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("ETag", etag)
+	w.Header().Add("Vary", "Cookie, Authorization")
+}
+
+func matchesMediaETag(header, etag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || strings.TrimPrefix(candidate, "W/") == etag {
+			return true
+		}
+	}
+	return false
 }

@@ -36,6 +36,7 @@ func run(args []string) error {
 	listen := flags.String("listen", envOr("CONVOMEOW_LISTEN", "127.0.0.1:8787"), "HTTP listen address for serve")
 	baseURL := flags.String("url", envOr("CONVOMEOW_URL", "http://127.0.0.1:8787"), "daemon URL for CLI commands")
 	configPath := flags.String("config", "", "configuration file for serve (default: <data-dir>/config.yaml)")
+	webDir := flags.String("web-dir", "", "serve the built web client from this directory")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -54,7 +55,7 @@ func run(args []string) error {
 		if *configPath == "" {
 			*configPath = filepath.Join(paths.Dir, "config.yaml")
 		}
-		return serve(paths, *listen, *configPath)
+		return serve(paths, *listen, *configPath, *webDir)
 	}
 	token, err := paths.ReadToken()
 	if err != nil {
@@ -65,7 +66,7 @@ func run(args []string) error {
 	return cli.New(*baseURL, token).Run(ctx, remaining)
 }
 
-func serve(paths config.Paths, listen, configPath string) error {
+func serve(paths config.Paths, listen, configPath, webDir string) error {
 	if err := paths.EnsureDir(); err != nil {
 		return err
 	}
@@ -121,7 +122,15 @@ func serve(paths config.Paths, listen, configPath string) error {
 		service.Close()
 		return fmt.Errorf("start accounts: %w", err)
 	}
-	server := &http.Server{Addr: listen, Handler: native.New(service, token), ReadHeaderTimeout: 10 * time.Second}
+	handler := native.New(service, token)
+	if webDir != "" {
+		handler, err = native.NewWithWeb(service, token, webDir)
+		if err != nil {
+			service.Close()
+			return fmt.Errorf("open web client: %w", err)
+		}
+	}
+	server := &http.Server{Addr: listen, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	serverErr := make(chan error, 1)
 	go func() { serverErr <- server.ListenAndServe() }()
 	slog.Info("service started", "listen", listen, "data_dir", paths.Dir, "accounts", len(service.ListAccounts()))

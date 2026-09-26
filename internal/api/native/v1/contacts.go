@@ -104,6 +104,18 @@ func (s *Server) getContactAvatar(w http.ResponseWriter, r *http.Request) {
 	s.writeAvatar(w, r, accountID, contact.ProviderID)
 }
 
+func (s *Server) getAccountAvatar(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	avatar, err := s.service.AccountAvatar(ctx, r.PathValue("id"))
+	if err != nil {
+		respondError(w, r, err)
+		return
+	}
+	serveAvatar(w, r, avatar)
+}
+
 func (s *Server) getConversationAvatar(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)

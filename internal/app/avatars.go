@@ -260,6 +260,17 @@ func (s *Service) Avatar(ctx context.Context, accountID, providerID string) (cor
 	return core.Avatar{}, core.ErrNotConnected
 }
 
+func (s *Service) AccountAvatar(ctx context.Context, id string) (core.Avatar, error) {
+	account, err := s.Account(id)
+	if err != nil {
+		return core.Avatar{}, err
+	}
+	if account.ProviderIdentity == "" {
+		return core.Avatar{}, core.ErrNotConnected
+	}
+	return s.Avatar(ctx, id, account.ProviderIdentity)
+}
+
 func (s *Service) ConversationAvatar(ctx context.Context, id string) (core.Avatar, error) {
 	conversation, err := s.repo.GetConversation(ctx, id)
 	if err != nil {
@@ -412,6 +423,7 @@ func (s *Service) saveMissingAvatar(ctx context.Context, accountID, providerID s
 	err = s.repo.SaveAvatar(ctx, core.AvatarRecord{AccountID: accountID, ProviderID: providerID, CheckedAt: time.Now().UTC()})
 	s.avatars.mu.Unlock()
 	if err == nil {
+		s.publish(Notification{Type: AvatarsChanged, AccountID: accountID})
 		s.scanPendingMedia()
 	}
 	return err
@@ -422,6 +434,7 @@ func (s *Service) clearAccountAvatars(ctx context.Context, accountID string) err
 	err := s.repo.ClearAccountAvatars(ctx, accountID)
 	s.avatars.mu.Unlock()
 	if err == nil {
+		s.publish(Notification{Type: AvatarsChanged, AccountID: accountID})
 		s.scanPendingMedia()
 	}
 	return err
@@ -494,6 +507,7 @@ func (s *Service) saveAvatar(ctx context.Context, accountID, providerID string, 
 		}
 		return saveErr
 	}
+	s.publish(Notification{Type: AvatarsChanged, AccountID: accountID})
 	s.scanPendingMedia()
 	return nil
 }

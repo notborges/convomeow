@@ -65,6 +65,10 @@ func (s *Service) SendMedia(ctx context.Context, conversationID string, kind cor
 	if !created {
 		return s.repo.GetMessage(ctx, reserved.ID)
 	}
+	for i := range reserved.Attachments {
+		s.fillMediaDimensions(ctx, &reserved.Attachments[i])
+	}
+	s.notifyConversation(reserved.AccountID, reserved.ConversationID)
 	s.scanPendingMedia()
 	return reserved, nil
 }
@@ -236,6 +240,8 @@ func (s *Service) processMediaSend(id string) (claimed bool) {
 	defer recordCancel()
 	if err := s.repo.CompleteMediaSend(recordCtx, id, result, sent); err != nil {
 		s.logger.Error("record outgoing media result failed", "message_id", id, "error", err)
+	} else {
+		s.notifyMessage(id)
 	}
 	return
 }
@@ -283,6 +289,8 @@ func (s *Service) failMediaSend(job core.OutgoingMediaJob, cause error) {
 	defer cancel()
 	if err := s.repo.CompleteMediaSend(ctx, job.MessageID, "failed", core.SentMessage{}); err != nil {
 		s.logger.Error("record outgoing media failure failed", "message_id", job.MessageID, "error", err)
+	} else {
+		s.notifyMessage(job.MessageID)
 	}
 	s.logger.Warn("outgoing media failed", "message_id", job.MessageID, "error", cause)
 }
