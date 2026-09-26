@@ -1,7 +1,8 @@
-.PHONY: fmt fmt-check check
+.PHONY: fmt fmt-check check web-check
 
 fmt:
 	gofmt -w cmd internal
+	cd web && bun run format
 
 fmt-check:
 	@unformatted="$$(gofmt -l cmd internal)"; \
@@ -10,7 +11,10 @@ fmt-check:
 		exit 1; \
 	fi
 
-check: fmt-check
+web-check:
+	cd web && bun run check
+
+check: fmt-check web-check
 	go mod tidy -diff
 	go mod verify
 	go build ./...

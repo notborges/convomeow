@@ -20,6 +20,10 @@
 /cmd/convomeow/convomeow
 /bin/
 /dist/
+/web/dist/
+/web/node_modules/
+/web/test-results/
+/web/playwright-report/
 *.exe
 *.test
 *.out

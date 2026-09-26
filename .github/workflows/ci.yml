@@ -27,5 +27,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install web dependencies
+        working-directory: web
+        run: bun ci
       - name: Check code
         run: make check

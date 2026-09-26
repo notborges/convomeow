@@ -1,3 +1,5 @@
+<img src="web/public/brand/convomeow.png" alt="ConvoMeow logo" width="120" height="120">
+
 # ConvoMeow
 
 ConvoMeow runs WhatsApp accounts on one server through [whatsmeow](https://github.com/tulir/whatsmeow). Its CLI uses a local HTTP API to manage accounts, browse contacts and conversations, send text and files, and read saved messages.
@@ -36,6 +38,23 @@ The daemon listens on `127.0.0.1:8787` and writes to `./data`. Put `--data-dir D
 
 The CLI displays a QR code during pairing. Scan it from WhatsApp's **Linked devices** screen. The daemon loads paired sessions from SQLite when it starts. Run one daemon per data directory; the process lock prevents a second daemon from opening the same files.
 
+## Web client
+
+The web client needs Bun to build. From the repository root:
+
+```sh
+cd web
+bun install
+bun run build
+cd ..
+go build -o convomeow ./cmd/convomeow
+./convomeow --web-dir web/dist serve
+```
+
+Open `http://127.0.0.1:8787/app/` and sign in with the key in `data/control.token`. Browser sign-in lasts 30 days and survives daemon restarts. Sign out to clear it from the browser; changing the access key invalidates existing browser sessions. The client can add and pair accounts, browse chats and contacts, send text and files, and view stored media. Live updates arrive over a WebSocket; messages and files use the HTTP API. Leave out `--web-dir` to run the API and CLI without the web client. For access from another machine, put the daemon behind HTTPS.
+
+For frontend development, run `bun run dev` in `web` while the Go daemon runs on port 8787. Vite proxies API calls to the daemon. `web/bun.lock` records the versions used for a build; `bun update` refreshes them from the `latest` declarations in `web/package.json`.
+
 ## Native API
 
 The CLI uses ConvoMeow's native API. The [OpenAPI file](docs/api/openapi-v1.yaml) defines the current routes and payloads.
@@ -67,7 +86,7 @@ To send a file, post one multipart `file` part to the account's uploads route. T
 
 Media sends return `202 Accepted` and a queued message. Poll the `Location` URL until its state is `sent`, `failed`, or `outcome_unknown`. Reuse both the upload ID and idempotency key if a send request fails. The CLI prints those values for a retry with `message send-file --key KEY --upload-id ID ACCOUNT PHONE_OR_CONVERSATION_ID KIND`.
 
-List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Messages use WhatsApp timestamps, so imported history appears below newer messages even when it arrives later. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
+List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Messages use provider timestamps and, when available, provider ordering to break timestamp ties. Messages without ordering metadata use a saved local sequence. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
 
 ConvoMeow assigns conversation and message IDs. WhatsApp chat IDs appear as read-only `provider_chat_id` values; API paths use ConvoMeow IDs.
 
@@ -79,7 +98,7 @@ The API saves an outgoing message before asking WhatsApp to send it. A failed re
 
 `data/app.sqlite` holds accounts, conversations, group details, messages, media metadata, and send jobs. `data/whatsmeow.sqlite` holds WhatsApp sessions and synced contact names. Protect both databases, stored media, and their backups. ConvoMeow creates the data directory, control token, and local media files with owner-only permissions.
 
-ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. It attempts to download new images, videos, audio, documents, and stickers in the background. Requesting a file from imported history starts its download. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
+ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. To request earlier messages, post `{"before_message_id":"<saved-message-id>","count":50}` to `/api/v1/conversations/{id}/history-requests`. The server merges returned history into saved messages. A `202` response confirms the request was sent, not that the phone returned history. It attempts to download new images, videos, audio, documents, and stickers in the background. The web client loads images and stickers from imported history as they enter view. Other imported files download on request. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
 
 Media defaults to `data/media`. Copy [config.example.yaml](config.example.yaml) to `data/config.yaml` to set limits or storage profiles. `local` stores files in the data directory by default. For AWS S3, add a profile with `driver: s3`, `bucket`, and `region`; the AWS SDK loads credentials from its standard chain. For Cloudflare R2, also set `endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com`, `region: auto`, and environment variable names for the access key and secret key. Set `active_profile` to the profile ID used for new files. Leave old profiles configured while attachments or avatars still use them; changing the active profile does not move files. Buckets must remain private.
 
@@ -96,6 +115,8 @@ The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](http
 - `internal/store/sqlite`: application database and schema
 - `internal/media`: local and S3-compatible file storage
 - `internal/api/native/v1`: authenticated HTTP API and v1 response types
+- `internal/api/web`: optional web client and owner session
+- `web/src`: browser client
 - `internal/cli`: API client and QR display
 
 ## Development

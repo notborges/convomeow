@@ -1,0 +1,33 @@
+{
+  "name": "convomeow-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "format": "biome format --write .",
+    "check": "biome check . && bun test && tsc --noEmit && vite build",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "latest",
+    "@hugeicons/core-free-icons": "latest",
+    "@hugeicons/react": "latest",
+    "@tanstack/react-query": "latest",
+    "i18next": "latest",
+    "motion": "latest",
+    "qrcode.react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-i18next": "latest",
+    "react-router": "latest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}
