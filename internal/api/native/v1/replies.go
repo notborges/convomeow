@@ -77,6 +77,9 @@ func (s *Server) messageWindow(w http.ResponseWriter, r *http.Request, limit int
 			messages = messages[1:]
 			previous = encodeMessageCursor(messages[0])
 		}
+		if len(messages) > 0 {
+			next = encodeMessageCursor(messages[len(messages)-1])
+		}
 	}
 	items := make([]messageResponse, 0, len(messages))
 	for _, m := range messages {

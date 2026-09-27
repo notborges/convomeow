@@ -1605,7 +1605,7 @@ components:
       properties:
         previous_cursor:
           type: string
-          description: Cursor for newer messages from a window or after_cursor request. Pass it as after_cursor.
+          description: Cursor for newer messages. Returned when a history page has a newer boundary; pass it as after_cursor.
         items:
           type: array
           items:

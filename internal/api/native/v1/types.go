@@ -122,8 +122,9 @@ func (s *Server) conversationFromCore(c core.Conversation) conversationResponse 
 }
 
 type pageResponse[T any] struct {
-	Items      []T    `json:"items"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Items          []T    `json:"items"`
+	NextCursor     string `json:"next_cursor,omitempty"`
+	PreviousCursor string `json:"previous_cursor,omitempty"`
 }
 
 type loginAttemptResponse struct {

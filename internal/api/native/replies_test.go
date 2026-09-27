@@ -91,11 +91,19 @@ func TestReplySendValidationIdempotencyAndMessageWindow(t *testing.T) {
 		t.Fatalf("window: %+v", around)
 	}
 	newer := decode[page](t, request(t, server.Client(), "GET", url+"?limit=2&after_cursor="+around.Previous, nil, ""), 200)
-	if len(newer.Items) != 2 || newer.Items[0].ID != saved[7].ID || newer.Items[1].ID != saved[6].ID || newer.Previous == "" {
+	if len(newer.Items) != 2 || newer.Items[0].ID != saved[7].ID || newer.Items[1].ID != saved[6].ID || newer.Previous == "" || newer.Next == "" {
 		t.Fatalf("newer: %+v", newer)
 	}
 	older := decode[page](t, request(t, server.Client(), "GET", url+"?limit=2&cursor="+around.Next, nil, ""), 200)
-	if len(older.Items) != 2 || older.Items[0].ID != saved[2].ID || older.Items[1].ID != saved[1].ID {
+	if len(older.Items) != 2 || older.Items[0].ID != saved[2].ID || older.Items[1].ID != saved[1].ID || older.Previous == "" {
 		t.Fatalf("older: %+v", older)
+	}
+	back := decode[page](t, request(t, server.Client(), "GET", url+"?limit=2&after_cursor="+older.Previous, nil, ""), 200)
+	if len(back.Items) != 2 || back.Items[0].ID != saved[4].ID || back.Items[1].ID != saved[3].ID {
+		t.Fatalf("reverse older page: %+v", back)
+	}
+	reverse := decode[page](t, request(t, server.Client(), "GET", url+"?limit=2&cursor="+newer.Next, nil, ""), 200)
+	if len(reverse.Items) != 2 || reverse.Items[0].ID != saved[5].ID || reverse.Items[1].ID != saved[4].ID {
+		t.Fatalf("reverse newer page: %+v", reverse)
 	}
 }

@@ -197,7 +197,7 @@ func (s *Server) listConversationMessages(w http.ResponseWriter, r *http.Request
 		respondError(w, r, err)
 		return
 	}
-	s.writeMessagesPage(w, messages, limit)
+	s.writeMessagesPage(w, messages, limit, cursor != nil)
 }
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +263,7 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	s.writeMessagesPage(w, messages, limit)
+	s.writeMessagesPage(w, messages, limit, false)
 }
 
 func (s *Server) getMessage(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +275,7 @@ func (s *Server) getMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.messageFromCore(message))
 }
 
-func (s *Server) writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int) {
+func (s *Server) writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int, hasNewer bool) {
 	next := ""
 	if len(messages) > limit {
 		messages = messages[:limit]
@@ -286,5 +286,9 @@ func (s *Server) writeMessagesPage(w http.ResponseWriter, messages []core.Messag
 	for _, message := range messages {
 		items = append(items, s.messageFromCore(message))
 	}
-	writeJSON(w, http.StatusOK, pageResponse[messageResponse]{Items: items, NextCursor: next})
+	previous := ""
+	if hasNewer && len(messages) > 0 {
+		previous = encodeMessageCursor(messages[0])
+	}
+	writeJSON(w, http.StatusOK, pageResponse[messageResponse]{Items: items, NextCursor: next, PreviousCursor: previous})
 }
