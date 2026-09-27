@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -454,6 +452,10 @@ func (s *Service) Contact(ctx context.Context, accountID, providerID string) (co
 }
 
 func (s *Service) SendText(ctx context.Context, conversationID, text, key string) (core.Message, error) {
+	return s.SendTextReply(ctx, conversationID, text, key, "")
+}
+
+func (s *Service) SendTextReply(ctx context.Context, conversationID, text, key, replyID string) (core.Message, error) {
 	requestedText := text
 	text = strings.TrimSpace(text)
 	if text == "" || len(text) > 4096 {
@@ -466,11 +468,14 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	if err != nil {
 		return core.Message{}, err
 	}
-	hash := sha256.Sum256([]byte(conversationID + "\x00text\x00" + requestedText))
-	requestHash := hex.EncodeToString(hash[:])
+	requestHash := sendRequestHash(conversationID, "text", requestedText, replyID)
 	const actorID = "control"
 	if saved, found, err := s.repo.LookupSend(ctx, actorID, key, requestHash); err != nil || found {
 		return saved, err
+	}
+	reply, err := s.replyTarget(ctx, conversation, replyID)
+	if err != nil {
+		return core.Message{}, err
 	}
 	rt, err := s.runtime(conversation.AccountID)
 	if err != nil {
@@ -489,12 +494,13 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 	now := time.Now().UTC()
 	message := core.Message{AccountID: conversation.AccountID, ConversationID: conversationID, ChatID: prepared.ChatID,
 		ProviderMessageID: prepared.ProviderMessageID, Direction: "outbound", State: "queued", SenderID: prepared.SenderID,
-		Kind: core.MessageKindText, Text: text, OccurredAt: now, IngestedAt: now}
+		Reply: reply, Kind: core.MessageKindText, Text: text, OccurredAt: now, IngestedAt: now}
 	reserved, created, err := s.repo.ReserveSend(ctx, message, actorID, key, requestHash)
 	if err != nil || !created {
 		return reserved, err
 	}
 	s.notifyConversation(reserved.AccountID, reserved.ConversationID)
+	prepared.Reply = reply
 	sent, sendErr := session.SendText(ctx, prepared, text)
 	result := "sent"
 	if sendErr != nil {

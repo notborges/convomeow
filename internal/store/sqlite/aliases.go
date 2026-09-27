@@ -234,6 +234,11 @@ FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targ
 }
 
 func mergeMessageOrderTx(ctx context.Context, tx *sql.Tx, targetID, sourceID string) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO message_replies(message_id, provider_message_id, sender_id, kind, text)
+ SELECT ?, provider_message_id, sender_id, kind, text FROM message_replies WHERE message_id = ?
+ ON CONFLICT(message_id) DO NOTHING`, targetID, sourceID); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `UPDATE messages SET provider_order = COALESCE(provider_order,
  (SELECT provider_order FROM messages WHERE public_id = ?)) WHERE public_id = ?`, sourceID, targetID)
 	return err

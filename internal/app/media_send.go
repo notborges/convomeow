@@ -3,8 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +15,10 @@ import (
 )
 
 func (s *Service) SendMedia(ctx context.Context, conversationID string, kind core.MessageKind, uploadID, caption, key string) (core.Message, error) {
+	return s.SendMediaReply(ctx, conversationID, kind, uploadID, caption, key, "")
+}
+
+func (s *Service) SendMediaReply(ctx context.Context, conversationID string, kind core.MessageKind, uploadID, caption, key, replyID string) (core.Message, error) {
 	if kind != core.MessageKindImage && kind != core.MessageKindVideo && kind != core.MessageKindAudio &&
 		kind != core.MessageKindDocument && kind != core.MessageKindSticker {
 		return core.Message{}, fmt.Errorf("%w: unsupported media kind", core.ErrInvalid)
@@ -34,11 +36,14 @@ func (s *Service) SendMedia(ctx context.Context, conversationID string, kind cor
 	if err != nil {
 		return core.Message{}, err
 	}
-	hash := sha256.Sum256([]byte(conversationID + "\x00" + string(kind) + "\x00" + uploadID + "\x00" + caption))
-	requestHash := hex.EncodeToString(hash[:])
+	requestHash := sendRequestHash(conversationID, string(kind), uploadID, caption, replyID)
 	const actorID = "control"
 	if saved, found, err := s.repo.LookupSend(ctx, actorID, key, requestHash); err != nil || found {
 		return saved, err
+	}
+	reply, err := s.replyTarget(ctx, conversation, replyID)
+	if err != nil {
+		return core.Message{}, err
 	}
 	rt, err := s.runtime(conversation.AccountID)
 	if err != nil {
@@ -57,7 +62,7 @@ func (s *Service) SendMedia(ctx context.Context, conversationID string, kind cor
 	now := time.Now().UTC()
 	message := core.Message{AccountID: conversation.AccountID, ConversationID: conversationID, ChatID: prepared.ChatID,
 		ProviderMessageID: prepared.ProviderMessageID, Direction: "outbound", State: "queued", SenderID: prepared.SenderID,
-		Kind: kind, Text: strings.TrimSpace(caption), OccurredAt: now, IngestedAt: now}
+		Reply: reply, Kind: kind, Text: strings.TrimSpace(caption), OccurredAt: now, IngestedAt: now}
 	reserved, created, err := s.repo.ReserveMediaSend(ctx, message, actorID, key, requestHash, uploadID)
 	if err != nil {
 		return core.Message{}, err
@@ -222,7 +227,7 @@ func (s *Service) processMediaSend(id string) (claimed bool) {
 		s.retryMediaSend(job, err)
 		return
 	}
-	prepared := core.PreparedMessage{ChatID: job.ChatID, ProviderMessageID: job.ProviderMessageID, SenderID: job.SenderID}
+	prepared := core.PreparedMessage{Reply: message.Reply, ChatID: job.ChatID, ProviderMessageID: job.ProviderMessageID, SenderID: job.SenderID}
 	mediaDescription := core.OutgoingMedia{Kind: job.Kind, MIMEType: job.MIMEType, FileName: job.FileName,
 		Caption: job.Caption, Width: width, Height: height}
 	sent, sendErr := session.SendMedia(ctx, prepared, mediaDescription, uploaded)

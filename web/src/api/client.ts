@@ -109,21 +109,39 @@ export const api = {
         ...json({ target: { type, value } }),
       },
     ),
-  messages: (conversationID: string, cursor?: string) =>
+  messages: (
+    conversationID: string,
+    cursor?: string,
+    position?: { around?: string; after?: string },
+  ) =>
     request<Page<Message>>(
       pageURL(
         `/api/v1/conversations/${encodeURIComponent(conversationID)}/messages`,
-        { cursor, limit: "50" },
+        {
+          cursor,
+          limit: "50",
+          around_message_id: position?.around,
+          after_cursor: position?.after,
+        },
       ),
     ),
   message: (id: string) =>
     request<Message>(`/api/v1/messages/${encodeURIComponent(id)}`),
-  sendText: (conversationID: string, text: string, key: string) =>
+  sendText: (
+    conversationID: string,
+    text: string,
+    key: string,
+    replyID?: string,
+  ) =>
     request<Message>(
       `/api/v1/conversations/${encodeURIComponent(conversationID)}/messages`,
       {
         method: "POST",
-        ...json({ kind: "text", content: { text } }),
+        ...json({
+          kind: "text",
+          content: { text },
+          reply_to_message_id: replyID,
+        }),
         headers: { "Content-Type": "application/json", "Idempotency-Key": key },
       },
     ),
@@ -141,12 +159,17 @@ export const api = {
     uploadID: string,
     caption: string,
     key: string,
+    replyID?: string,
   ) =>
     request<Message>(
       `/api/v1/conversations/${encodeURIComponent(conversationID)}/messages`,
       {
         method: "POST",
-        ...json({ kind, content: { upload_id: uploadID, caption } }),
+        ...json({
+          kind,
+          content: { upload_id: uploadID, caption },
+          reply_to_message_id: replyID,
+        }),
         headers: { "Content-Type": "application/json", "Idempotency-Key": key },
       },
     ),

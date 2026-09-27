@@ -27,6 +27,7 @@ func accountFromCore(a core.AccountStatus) accountResponse {
 }
 
 type messageResponse struct {
+	Reply             *core.Reply          `json:"reply,omitempty"`
 	ID                string               `json:"id"`
 	AccountID         string               `json:"account_id"`
 	ConversationID    string               `json:"conversation_id"`
@@ -66,7 +67,7 @@ func messageFromCore(m core.Message) messageResponse {
 		attachments = append(attachments, attachmentResponse{ID: attachment.ID, Kind: string(attachment.Kind),
 			DurationSeconds: attachment.DurationSeconds, Width: attachment.Width, Height: attachment.Height, MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
 	}
-	return messageResponse{ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
+	return messageResponse{Reply: m.Reply, ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
 		Kind: string(m.Kind), Content: content, Attachments: attachments, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
 }

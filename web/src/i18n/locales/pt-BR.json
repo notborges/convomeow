@@ -143,7 +143,11 @@
   },
   "message": {
     "sent": "Enviada",
-    "unknown": "Este tipo de mensagem ainda não tem suporte."
+    "unknown": "Este tipo de mensagem ainda não tem suporte.",
+    "actions": "Ações da mensagem",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyFailed": "Não foi possível copiar. Tente novamente"
   },
   "catalog": {
     "title": "Sistema de design do ConvoMeow",
@@ -239,5 +243,15 @@
   "realtime": {
     "connecting": "Conectando às atualizações…",
     "reconnecting": "Reconectando… As atualizações podem atrasar."
+  },
+  "reply": {
+    "action": "Responder",
+    "cancel": "Cancelar resposta",
+    "you": "Você",
+    "unknownSender": "Mensagem",
+    "jump": "Ver mensagem original",
+    "unavailable": "A mensagem original não está salva",
+    "newer": "Mensagens mais recentes",
+    "loading": "Carregando mensagem original…"
   }
 }

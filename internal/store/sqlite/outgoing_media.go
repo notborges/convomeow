@@ -136,6 +136,9 @@ storage_profile_id, object_key, stored_size, stored_sha256) VALUES(?, ?, 0, ?, ?
 	if err != nil {
 		return core.Message{}, false, normalizeError(err)
 	}
+	if err := saveReplyTx(ctx, tx, m.ID, m.Reply); err != nil {
+		return core.Message{}, false, err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO outgoing_media_jobs(message_id, phase) VALUES(?, 'queued')`, m.ID); err != nil {
 		return core.Message{}, false, err
 	}

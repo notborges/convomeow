@@ -37,6 +37,7 @@ export default function DesignSystem() {
     occurred_at: "2026-01-01T10:00:00Z",
   };
 
+  const [replySelected, setReplySelected] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("chats");
   const [dialog, setDialog] = useState(false);
@@ -174,8 +175,17 @@ export default function DesignSystem() {
       </section>
       <section>
         <h2>{t(($) => $.chats.title)}</h2>
+        {replySelected && <p role="status">{t(($) => $.reply.action)}</p>}
         <div className="catalog__messages">
-          <MessageBubble message={sample} grouped={false} showSender={false} />
+          <MessageBubble
+            message={{
+              ...sample,
+              reply: { kind: "text", text: t(($) => $.catalog.sampleHello) },
+            }}
+            grouped={false}
+            showSender={false}
+            onReply={() => setReplySelected(true)}
+          />
           <MessageBubble
             message={{
               ...sample,
@@ -184,6 +194,7 @@ export default function DesignSystem() {
             }}
             grouped={false}
             showSender={false}
+            onReply={() => setReplySelected(true)}
           />
           <MessageBubble
             message={{

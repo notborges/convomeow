@@ -537,6 +537,16 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
+        - name: around_message_id
+          in: query
+          description: Return a bounded window containing this saved message. Mutually exclusive with cursor and after_cursor.
+          schema:
+            type: string
+        - name: after_cursor
+          in: query
+          description: Load messages newer than this cursor, still returned newest first. Mutually exclusive with cursor and around_message_id.
+          schema:
+            type: string
       responses:
         '200':
           description: Newest provider message timestamps first. History may arrive after newer messages.
@@ -1026,6 +1036,9 @@ components:
       additionalProperties: false
       required: [kind, content]
       properties:
+        reply_to_message_id:
+          type: string
+          description: A confirmed saved message in this conversation to reply to. Included in idempotency checks.
         kind:
           type: string
           const: text
@@ -1044,6 +1057,9 @@ components:
       required: [kind, content]
       description: Images accept JPEG, PNG, or WebP; videos accept MP4 or 3GPP; audio accepts MP3, MP4, Ogg, AAC, or AMR. Documents accept any valid MIME type. Stickers require static WebP.
       properties:
+        reply_to_message_id:
+          type: string
+          description: A confirmed saved message in this conversation to reply to. Included in idempotency checks.
         kind:
           type: string
           enum: [image, video, audio, document, sticker]
@@ -1077,10 +1093,28 @@ components:
         expires_at:
           type: string
           format: date-time
+    Reply:
+      type: object
+      required: [kind]
+      properties:
+        message_id:
+          type: string
+          description: Saved original message ID, omitted when the original is not available locally.
+        sender_id:
+          type: string
+        kind:
+          type: string
+          description: Quoted message type, or unknown for unsupported content.
+        text:
+          type: string
+          maxLength: 512
+          description: Quoted text or caption preview.
     Message:
       type: object
       required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]
       properties:
+        reply:
+          $ref: '#/components/schemas/Reply'
         id:
           type: string
         account_id:
@@ -1115,7 +1149,7 @@ components:
         occurred_at:
           type: string
           format: date-time
-          description: Timestamp supplied by the provider. Message pages use this timestamp and ID for ordering.
+          description: Timestamp supplied by the provider. Message pages use this timestamp, provider ordering when available, and a saved local sequence for ordering.
         ingested_at:
           type: string
           format: date-time
@@ -1161,6 +1195,9 @@ components:
       type: object
       required: [items]
       properties:
+        previous_cursor:
+          type: string
+          description: Cursor for newer messages from a window or after_cursor request. Pass it as after_cursor.
         items:
           type: array
           items:

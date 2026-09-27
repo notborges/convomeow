@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import { keys } from "../../api/queries";
-import type { Account } from "../../api/types";
+import type { Account, Message } from "../../api/types";
 import { LiveAvatar } from "../../app/LiveAvatar";
 import i18n from "../../i18n";
 import { formatDate } from "../../i18n/format";
@@ -51,6 +51,10 @@ export function ChatThread({
 }) {
   const { t } = useTranslation();
 
+  const [reply, setReply] = useState<Message>();
+  const [anchor, setAnchor] = useState("");
+  const [jumpTarget, setJumpTarget] = useState("");
+  const [highlight, setHighlight] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const conversation = useQuery({
@@ -59,11 +63,19 @@ export function ChatThread({
     queryFn: () => api.conversation(conversationID),
   });
   const messages = useInfiniteQuery({
-    queryKey: keys.messages(conversationID),
+    queryKey: [...keys.messages(conversationID), { around: anchor }],
     meta: { accountID: account.id },
-    queryFn: ({ pageParam }) => api.messages(conversationID, pageParam),
-    initialPageParam: "",
-    getNextPageParam: (page) => page.next_cursor,
+    queryFn: ({ pageParam }) =>
+      api.messages(conversationID, pageParam.cursor, pageParam),
+    initialPageParam: { around: anchor } as {
+      around?: string;
+      cursor?: string;
+      after?: string;
+    },
+    getNextPageParam: (page) =>
+      page.next_cursor ? { cursor: page.next_cursor } : undefined,
+    getPreviousPageParam: (page) =>
+      page.previous_cursor ? { after: page.previous_cursor } : undefined,
   });
   const scroll = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
@@ -74,9 +86,9 @@ export function ChatThread({
   const newestID = items[0]?.id;
 
   useEffect(() => {
-    if (nearBottom.current && scroll.current)
+    if (!anchor && nearBottom.current && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [newestID]);
+  }, [newestID, anchor]);
 
   useLayoutEffect(() => {
     if (priorHeight.current !== undefined && scroll.current) {
@@ -97,6 +109,40 @@ export function ChatThread({
     observer.observe(flow);
     return () => observer.disconnect();
   }, []);
+
+  function jumpToMessage(id: string) {
+    nearBottom.current = false;
+    setJumpTarget(id);
+    if (!items.some((message) => message.id === id)) setAnchor(id);
+  }
+
+  useLayoutEffect(() => {
+    if (!jumpTarget) return;
+    const target = document.getElementById(`message-${jumpTarget}`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+    setHighlight(jumpTarget);
+    setJumpTarget("");
+    setAwayFromBottom(true);
+  }, [jumpTarget, items]);
+
+  useEffect(() => {
+    if (!highlight) return;
+    const timer = window.setTimeout(() => setHighlight(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [highlight]);
+
+  function replySender(message: { sender_id?: string; direction?: string }) {
+    if (
+      message.direction === "outbound" ||
+      message.sender_id === account.provider_identity
+    )
+      return t(($) => $.reply.you);
+    if (conversation.data?.kind === "direct")
+      return conversation.data.display_name;
+    return message.sender_id?.split("@")[0];
+  }
 
   function loadOlder() {
     if (scroll.current) priorHeight.current = scroll.current.scrollHeight;
@@ -175,6 +221,18 @@ export function ChatThread({
       <div className="thread-body">
         <div className="thread-messages" ref={scroll} onScroll={onScroll}>
           <div className="message-flow">
+            {anchor && (
+              <Button
+                className="load-more"
+                onClick={() => {
+                  setAnchor("");
+                  setJumpTarget("");
+                  nearBottom.current = true;
+                }}
+              >
+                {t(($) => $.thread.latest)}
+              </Button>
+            )}
             {messages.hasNextPage && (
               <Button
                 className="load-more load-more--messages"
@@ -215,7 +273,12 @@ export function ChatThread({
                 const showDay = day !== lastDay;
                 lastDay = day;
                 return (
-                  <div key={message.id}>
+                  <div
+                    key={message.id}
+                    className={
+                      highlight === message.id ? "reply-target" : undefined
+                    }
+                  >
                     {showDay && (
                       <div className="day-label">
                         {messageDay(message.occurred_at)}
@@ -223,6 +286,11 @@ export function ChatThread({
                     )}
                     <MessageBubble
                       message={message}
+                      onReply={(message) => setReply({ ...message })}
+                      onJump={jumpToMessage}
+                      replySender={
+                        message.reply ? replySender(message.reply) : undefined
+                      }
                       grouped={grouped && !showDay}
                       showSender={conversation.data?.kind === "group"}
                     />
@@ -230,10 +298,19 @@ export function ChatThread({
                 );
               })
             )}
+            {messages.hasPreviousPage && (
+              <Button
+                className="load-more"
+                disabled={messages.isFetchingPreviousPage}
+                onClick={() => messages.fetchPreviousPage()}
+              >
+                {t(($) => $.reply.newer)}
+              </Button>
+            )}
           </div>
         </div>
         <AnimatePresence>
-          {awayFromBottom && (
+          {awayFromBottom && !anchor && (
             <motion.div
               className="jump-latest"
               initial={{ opacity: 0, y: 8 }}
@@ -243,6 +320,8 @@ export function ChatThread({
             >
               <Button
                 onClick={() => {
+                  setAnchor("");
+                  setJumpTarget("");
                   if (scroll.current)
                     scroll.current.scrollTop = scroll.current.scrollHeight;
                   nearBottom.current = true;
@@ -260,6 +339,18 @@ export function ChatThread({
         accountID={account.id}
         conversationID={conversationID}
         connected={account.state === "connected"}
+        onSent={() => {
+          setAnchor("");
+          setJumpTarget("");
+          nearBottom.current = true;
+        }}
+        reply={reply}
+        replySender={reply ? replySender(reply) : undefined}
+        onClearReply={(id) =>
+          setReply((current) =>
+            !id || current?.id === id ? undefined : current,
+          )
+        }
       />
       {detailsOpen && conversation.data && (
         <ConversationDetails

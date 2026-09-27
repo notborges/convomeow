@@ -1,6 +1,7 @@
 export interface Page<T> {
   items: T[];
   next_cursor?: string;
+  previous_cursor?: string;
 }
 
 export interface Account {
@@ -34,7 +35,15 @@ export interface Attachment {
   availability: string;
 }
 
+export interface Reply {
+  message_id?: string;
+  sender_id?: string;
+  kind: string;
+  text?: string;
+}
+
 export interface Message {
+  reply?: Reply;
   id: string;
   account_id: string;
   conversation_id: string;

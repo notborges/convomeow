@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -58,6 +59,9 @@ provider_order = COALESCE(?, provider_order) WHERE public_id = ?`,
 			if err != nil {
 				return core.Message{}, err
 			}
+			if err := saveReplyTx(ctx, tx, saved.ID, m.Reply); err != nil {
+				return core.Message{}, err
+			}
 			if err := saveAttachmentsTx(ctx, tx, saved.ID, m.Attachments); err != nil {
 				return core.Message{}, err
 			}
@@ -90,6 +94,9 @@ provider_order = COALESCE(excluded.provider_order, messages.provider_order)`,
 	}
 	saved, err := scanMessage(tx.QueryRowContext(ctx, `SELECT `+messageColumns+` FROM messages WHERE account_id = ? AND conversation_id = ? AND provider_message_id = ?`, m.AccountID, m.ConversationID, m.ProviderMessageID))
 	if err != nil {
+		return core.Message{}, err
+	}
+	if err := saveReplyTx(ctx, tx, saved.ID, m.Reply); err != nil {
 		return core.Message{}, err
 	}
 	if err := saveAttachmentsTx(ctx, tx, saved.ID, m.Attachments); err != nil {
@@ -179,6 +186,9 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	if err != nil {
 		return core.Message{}, false, normalizeError(err)
 	}
+	if err := saveReplyTx(ctx, tx, m.ID, m.Reply); err != nil {
+		return core.Message{}, false, err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO send_keys(actor_id, key, request_hash, message_id) VALUES(?, ?, ?, ?)`, actorID, key, requestHash, m.ID); err != nil {
 		return core.Message{}, false, normalizeError(err)
 	}
@@ -217,7 +227,7 @@ WHERE public_id = ? AND state = 'queued'`, state, sent.SenderID, sent.SenderID, 
 	if err := tx.Commit(); err != nil {
 		return core.Message{}, err
 	}
-	return message, nil
+	return s.GetMessage(ctx, message.ID)
 }
 
 func (s *Store) GetMessage(ctx context.Context, id string) (core.Message, error) {
@@ -263,10 +273,18 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 				return nil, err
 			}
 		}
-		query += ` AND (occurred_at, COALESCE(provider_order, '~'), local_order) < (?, ?, ?)`
+		comparison := " < "
+		if before.After {
+			comparison = " > "
+		}
+		query += ` AND (occurred_at, COALESCE(provider_order, '~'), local_order)` + comparison + `(?, ?, ?)`
 		args = append(args, dbTime(before.Time), order, local)
 	}
-	query += ` ORDER BY ` + messageOrder + ` LIMIT ?`
+	order := messageOrder
+	if before != nil && before.After {
+		order = "occurred_at ASC, COALESCE(provider_order, '~') ASC, local_order ASC"
+	}
+	query += ` ORDER BY ` + order + ` LIMIT ?`
 	args = append(args, limit)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -286,6 +304,9 @@ func (s *Store) listMessages(ctx context.Context, scope string, scopeID string, 
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
+	}
+	if before != nil && before.After {
+		slices.Reverse(messages)
 	}
 	if err := s.attachToMessages(ctx, messages); err != nil {
 		return nil, err

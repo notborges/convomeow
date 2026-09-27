@@ -97,6 +97,7 @@ func TestMediaSendRecoveryKeepsReadyFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 		intent := core.Message{AccountID: "account-1", ConversationID: conversation.ID, ChatID: conversation.ProviderChatID,
+			Reply:             &core.Reply{ProviderMessageID: "quoted", SenderID: "sender", Kind: core.MessageKindText, Text: "preview"},
 			ProviderMessageID: "prepared-" + phase, Kind: core.MessageKindImage, IngestedAt: now}
 		message, created, err := store.ReserveMediaSend(ctx, intent, "control", "key-"+phase, "hash-"+phase, uploadID)
 		if err != nil || !created || len(message.Attachments) != 1 || message.Attachments[0].ID != uploadID {
@@ -126,6 +127,9 @@ func TestMediaSendRecoveryKeepsReadyFiles(t *testing.T) {
 	queued, err := store.GetMessage(ctx, ids[0])
 	if err != nil || queued.State != "queued" || len(queued.Attachments) != 1 || queued.Attachments[0].Availability != "ready" {
 		t.Fatalf("upload phase recovery: %+v, %v", queued, err)
+	}
+	if queued.Reply == nil || queued.Reply.ProviderMessageID != "quoted" || queued.Reply.Text != "preview" {
+		t.Fatal("media reply lost on restart")
 	}
 	uncertain, err := store.GetMessage(ctx, ids[1])
 	if err != nil || uncertain.State != "outcome_unknown" || len(uncertain.Attachments) != 1 || uncertain.Attachments[0].Availability != "ready" {

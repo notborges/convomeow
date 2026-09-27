@@ -61,6 +61,7 @@ func (s *session) SendMedia(ctx context.Context, prepared core.PreparedMessage, 
 	if err != nil {
 		return core.SentMessage{}, err
 	}
+	setMediaReply(message, prepared.Reply)
 	response, err := s.client.SendMessage(ctx, jid, message, whatsmeow.SendRequestExtra{ID: types.MessageID(prepared.ProviderMessageID)})
 	if err != nil {
 		return core.SentMessage{}, err

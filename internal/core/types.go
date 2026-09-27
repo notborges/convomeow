@@ -55,7 +55,16 @@ type AccountStatus struct {
 	LastError string `json:"last_error,omitempty"`
 }
 
+type Reply struct {
+	MessageID         string      `json:"message_id,omitempty"`
+	ProviderMessageID string      `json:"-"`
+	SenderID          string      `json:"sender_id,omitempty"`
+	Kind              MessageKind `json:"kind"`
+	Text              string      `json:"text,omitempty"`
+}
+
 type Message struct {
+	Reply             *Reply          `json:"reply,omitempty"`
 	ProviderOrder     *uint64         `json:"-"`
 	LocalOrder        int64           `json:"-"`
 	ID                string          `json:"id"`
@@ -197,6 +206,7 @@ type ConversationTarget struct {
 }
 
 type PageCursor struct {
+	After         bool
 	ProviderOrder *uint64
 	LocalOrder    int64
 	Time          time.Time
@@ -250,6 +260,7 @@ type SentMessage struct {
 }
 
 type PreparedMessage struct {
+	Reply             *Reply
 	ChatID            string
 	ProviderMessageID string
 	SenderID          string

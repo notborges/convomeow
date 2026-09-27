@@ -142,5 +142,11 @@ FROM attachments WHERE message_id IN (`+strings.Join(marks, ",")+`) ORDER BY mes
 		a.Size = uint64(size)
 		messages[indexes[messageID]].Attachments = append(messages[indexes[messageID]].Attachments, a)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	return s.attachReplies(ctx, messages)
 }

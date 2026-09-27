@@ -181,6 +181,10 @@ func (s *Server) listConversationMessages(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+	if r.URL.Query().Get("around_message_id") != "" || r.URL.Query().Get("after_cursor") != "" {
+		s.messageWindow(w, r, limit)
+		return
+	}
 	messages, err := s.service.ListConversationMessages(r.Context(), r.PathValue("id"), cursor, limit+1)
 	if err != nil {
 		respondError(w, r, err)
@@ -191,6 +195,7 @@ func (s *Server) listConversationMessages(w http.ResponseWriter, r *http.Request
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		ReplyID string `json:"reply_to_message_id"`
 		Kind    string `json:"kind"`
 		Content struct {
 			Text     string `json:"text"`
@@ -216,13 +221,13 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 			writeProblem(w, r, http.StatusBadRequest, "invalid_input", "Text messages accept only content.text.")
 			return
 		}
-		message, err = s.service.SendText(ctx, r.PathValue("id"), body.Content.Text, key)
+		message, err = s.service.SendTextReply(ctx, r.PathValue("id"), body.Content.Text, key, body.ReplyID)
 	} else {
 		if body.Content.Text != "" || body.Content.UploadID == "" {
 			writeProblem(w, r, http.StatusBadRequest, "invalid_input", "Media messages require content.upload_id.")
 			return
 		}
-		message, err = s.service.SendMedia(ctx, r.PathValue("id"), core.MessageKind(body.Kind), body.Content.UploadID, body.Content.Caption, key)
+		message, err = s.service.SendMediaReply(ctx, r.PathValue("id"), core.MessageKind(body.Kind), body.Content.UploadID, body.Content.Caption, key, body.ReplyID)
 		status = http.StatusAccepted
 	}
 	if err != nil {

@@ -10,6 +10,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@base-ui/react": "latest",
     "@fontsource-variable/inter": "latest",
     "@hugeicons/core-free-icons": "latest",
     "@hugeicons/react": "latest",

@@ -18,9 +18,11 @@ import {
 import { Trans, useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import { keys } from "../../api/queries";
+import type { Message } from "../../api/types";
 import { type ErrorKey, errorKey } from "../../i18n/errors";
 import { IconButton } from "../../ui/Button";
 import { motionTiming } from "../../ui/motion";
+import { ReplyPreview } from "./ReplyPreview";
 
 function mediaKind(file: File): string {
   if (file.type.startsWith("image/")) return "image";
@@ -33,10 +35,18 @@ export function Composer({
   accountID,
   conversationID,
   connected,
+  reply,
+  replySender,
+  onClearReply,
+  onSent,
 }: {
   accountID: string;
   conversationID: string;
   connected: boolean;
+  reply?: Message;
+  replySender?: string;
+  onClearReply?: (id?: string) => void;
+  onSent?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -55,10 +65,15 @@ export function Composer({
         file?: File;
         uploadID?: string;
         key: string;
+        replyID?: string;
       }
     | undefined
   >(undefined);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (reply) textarea.current?.focus();
+  }, [reply]);
 
   useEffect(() => {
     if (!file?.type.startsWith("image/")) {
@@ -92,9 +107,11 @@ export function Composer({
     }
     const previous = retry.current;
     const attempt =
-      previous?.text === content && previous.file === file
+      previous?.text === content &&
+      previous.file === file &&
+      previous.replyID === reply?.id
         ? previous
-        : { text: content, file, key: crypto.randomUUID() };
+        : { text: content, file, key: crypto.randomUUID(), replyID: reply?.id };
     retry.current = attempt;
     setBusy(true);
     setError(undefined);
@@ -108,11 +125,19 @@ export function Composer({
           attempt.uploadID,
           content,
           attempt.key,
+          attempt.replyID,
         );
       } else {
-        await api.sendText(conversationID, content, attempt.key);
+        await api.sendText(
+          conversationID,
+          content,
+          attempt.key,
+          attempt.replyID,
+        );
       }
       retry.current = undefined;
+      if (attempt.replyID) onClearReply?.(attempt.replyID);
+      onSent?.();
       setText("");
       setFile(undefined);
       if (input.current) input.current.value = "";
@@ -143,6 +168,29 @@ export function Composer({
   return (
     <>
       <form className="composer" onSubmit={submit}>
+        {reply && (
+          <div className="composer-reply">
+            <ReplyPreview
+              sender={replySender}
+              reply={{
+                message_id: reply.id,
+                sender_id: reply.sender_id,
+                kind: reply.kind,
+                text: reply.content.text || reply.content.caption,
+              }}
+            />
+            <IconButton
+              label={t(($) => $.reply.cancel)}
+              disabled={busy}
+              onClick={() => {
+                onClearReply?.();
+                textarea.current?.focus();
+              }}
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={18} />
+            </IconButton>
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {file && (
             <motion.div

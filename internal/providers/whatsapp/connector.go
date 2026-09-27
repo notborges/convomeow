@@ -17,7 +17,6 @@ import (
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
-	"google.golang.org/protobuf/proto"
 )
 
 type Connector struct {
@@ -198,7 +197,7 @@ func (s *session) SendText(ctx context.Context, prepared core.PreparedMessage, t
 	if prepared.ProviderMessageID == "" {
 		return core.SentMessage{}, fmt.Errorf("%w: missing provider message ID", core.ErrInvalid)
 	}
-	response, err := s.client.SendMessage(ctx, jid, &waE2E.Message{Conversation: proto.String(text)}, whatsmeow.SendRequestExtra{ID: types.MessageID(prepared.ProviderMessageID)})
+	response, err := s.client.SendMessage(ctx, jid, textMessage(text, prepared.Reply), whatsmeow.SendRequestExtra{ID: types.MessageID(prepared.ProviderMessageID)})
 	if err != nil {
 		return core.SentMessage{}, err
 	}
@@ -272,7 +271,7 @@ func translateMessage(event *events.Message) *core.Message {
 	if event.Info.IsFromMe {
 		direction = "outbound"
 	}
-	message := &core.Message{ChatID: event.Info.Chat.String(), ProviderMessageID: string(event.Info.ID),
+	message := &core.Message{Reply: replyFromMessage(event.Message), ChatID: event.Info.Chat.String(), ProviderMessageID: string(event.Info.ID),
 		Direction: direction, Kind: kind, SenderID: event.Info.Sender.String(), Text: text, OccurredAt: event.Info.Timestamp}
 	if attachment := mediaAttachment(event.Message, kind, event.IsViewOnce); attachment != nil {
 		message.Attachments = []core.Attachment{*attachment}

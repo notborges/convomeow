@@ -25,26 +25,27 @@ import (
 )
 
 type fakeConnector struct {
-	historyRequests chan core.Message
-	nextID          atomic.Int64
-	sends           atomic.Int64
-	failSend        atomic.Bool
-	mediaPayload    []byte
-	mediaGate       chan struct{}
-	mediaDownloads  atomic.Int64
-	mediaUploads    atomic.Int64
-	mediaSends      atomic.Int64
-	failMediaUpload atomic.Bool
-	failMediaSend   atomic.Bool
-	contacts        map[string]core.Contact
-	avatar          core.Avatar
-	avatarMu        sync.RWMutex
-	avatarGate      <-chan struct{}
-	avatarStarted   chan<- struct{}
-	avatarFetches   atomic.Int64
-	offline         bool
-	eventMu         sync.Mutex
-	event           func(core.Event)
+	preparedMessages chan core.PreparedMessage
+	historyRequests  chan core.Message
+	nextID           atomic.Int64
+	sends            atomic.Int64
+	failSend         atomic.Bool
+	mediaPayload     []byte
+	mediaGate        chan struct{}
+	mediaDownloads   atomic.Int64
+	mediaUploads     atomic.Int64
+	mediaSends       atomic.Int64
+	failMediaUpload  atomic.Bool
+	failMediaSend    atomic.Bool
+	contacts         map[string]core.Contact
+	avatar           core.Avatar
+	avatarMu         sync.RWMutex
+	avatarGate       <-chan struct{}
+	avatarStarted    chan<- struct{}
+	avatarFetches    atomic.Int64
+	offline          bool
+	eventMu          sync.Mutex
+	event            func(core.Event)
 }
 
 func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, error) {
@@ -116,6 +117,9 @@ func (s *fakeSession) PrepareMessage(recipient string) (core.PreparedMessage, er
 }
 
 func (s *fakeSession) SendText(_ context.Context, prepared core.PreparedMessage, _ string) (core.SentMessage, error) {
+	if s.connector.preparedMessages != nil {
+		s.connector.preparedMessages <- prepared
+	}
 	s.connector.sends.Add(1)
 	if s.connector.failSend.Load() {
 		return core.SentMessage{}, errors.New("simulated provider timeout")
@@ -145,6 +149,9 @@ func (u fakeUploadedMedia) Size() int64    { return u.size }
 func (u fakeUploadedMedia) SHA256() []byte { return u.hash }
 
 func (s *fakeSession) SendMedia(_ context.Context, prepared core.PreparedMessage, _ core.OutgoingMedia, _ core.UploadedMedia) (core.SentMessage, error) {
+	if s.connector.preparedMessages != nil {
+		s.connector.preparedMessages <- prepared
+	}
 	s.connector.mediaSends.Add(1)
 	if s.connector.failMediaSend.Load() {
 		return core.SentMessage{}, errors.New("simulated media send timeout")

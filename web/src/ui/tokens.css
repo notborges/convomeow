@@ -62,6 +62,7 @@
   --avatar-5-ink: #825767;
   --avatar-6-bg: #d4e4ee;
   --avatar-6-ink: #466579;
+  --shadow-menu: 0 8px 28px -6px #25203340;
   --shadow-float: 0 12px 32px -12px #25203322;
   --shadow-dialog: 0 24px 80px -20px #17131f66;
   --backdrop: #17131f66;
@@ -75,6 +76,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --canvas: #17141d;
+  --shadow-menu: 0 8px 28px -6px #00000099;
   --surface: #24232b;
   --surface-subtle: #302a3b;
   --surface-hover: #3c334b;
