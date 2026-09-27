@@ -96,6 +96,14 @@ func TestAvatarCachePrefetchRefreshAndOfflineRead(t *testing.T) {
 	if err != nil || !bytes.Equal(avatar.Data, photo) {
 		t.Fatalf("refresh cached avatar: %+v, %v", avatar, err)
 	}
+	// The prefetch can save its file before releasing its in-flight request.
+	refreshDeadline := time.Now().Add(5 * time.Second)
+	for connector.avatarFetches.Load() < 2 && time.Now().Before(refreshDeadline) {
+		time.Sleep(20 * time.Millisecond)
+		if _, err := service.Avatar(context.Background(), accountID, providerID); err != nil {
+			t.Fatal(err)
+		}
+	}
 	refreshed, err := store.GetAvatar(context.Background(), accountID, providerID)
 	if err != nil || refreshed.ObjectKey != record.ObjectKey || connector.avatarFetches.Load() != 2 {
 		t.Fatalf("conditional refresh: %+v, fetches=%d, error=%v", refreshed, connector.avatarFetches.Load(), err)
