@@ -70,5 +70,10 @@ func (s *Store) ImportHistory(ctx context.Context, batch core.HistoryBatch) erro
 	} else if len(batch.Messages) > 0 {
 		return core.ErrInvalid
 	}
+	for _, receipt := range batch.Receipts {
+		if _, err := saveReceiptTx(ctx, tx, batch.AccountID, receipt); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }

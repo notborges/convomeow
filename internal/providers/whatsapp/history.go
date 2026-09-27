@@ -58,6 +58,7 @@ func (s *session) importHistory(event *events.HistorySync) {
 			}
 			message.ProviderOrder = item.MsgOrderID
 			batch.Messages = append(batch.Messages, *message)
+			batch.Receipts = append(batch.Receipts, historyReceipts(item.GetMessage(), *message, chat.Kind == "group")...)
 			messageCount++
 			if len(batch.Messages) == historyBatchSize {
 				ready := batch

@@ -130,6 +130,9 @@ func addChatLinkTx(ctx context.Context, tx *sql.Tx, accountID string, link core.
 			return normalizeError(err)
 		}
 	}
+	if err := mergeReceiptParticipantsTx(ctx, tx, accountID, link.First); err != nil {
+		return err
+	}
 	var count int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM conversation_aliases WHERE account_id = ? AND jid IN (?, ?)`, accountID, link.First, link.Second).Scan(&count); err != nil {
 		return err
@@ -234,6 +237,10 @@ FROM conversations AS source WHERE conversations.id = ? AND source.id = ?`, targ
 }
 
 func mergeMessageOrderTx(ctx context.Context, tx *sql.Tx, targetID, sourceID string) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO message_read_receipts(message_id,read_at) SELECT ?,read_at FROM message_read_receipts WHERE message_id=?
+ ON CONFLICT(message_id) DO UPDATE SET read_at=min(message_read_receipts.read_at,excluded.read_at)`, targetID, sourceID); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO message_replies(message_id, provider_message_id, sender_id, kind, text)
  SELECT ?, provider_message_id, sender_id, kind, text FROM message_replies WHERE message_id = ?
  ON CONFLICT(message_id) DO NOTHING`, targetID, sourceID); err != nil {

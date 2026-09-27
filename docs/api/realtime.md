@@ -28,6 +28,8 @@ Notifications follow saved resource changes or completed account/pairing state c
 {"type":"attachment.changed","account_id":"account-id","attachment_id":"attachment-id"}
 ```
 
+Receipt changes emit `conversations.changed`. Refresh message pages and any open message receipt details. Receipt notifications do not send read receipts back to the provider.
+
 Coalesce notifications before fetching. If a notification arrives during an older HTTP request, fetch again after that request finishes. Use the HTTP responses for message ordering and pagination.
 
 ## Connection lifecycle

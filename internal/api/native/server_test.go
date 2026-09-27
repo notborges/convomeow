@@ -25,6 +25,8 @@ import (
 )
 
 type fakeConnector struct {
+	readCalls        chan []string
+	failReadSender   string
 	preparedMessages chan core.PreparedMessage
 	historyRequests  chan core.Message
 	nextID           atomic.Int64
@@ -466,4 +468,14 @@ func (s *fakeSession) RequestHistory(_ context.Context, before core.Message, _ i
 		s.connector.historyRequests <- before
 	}
 	return "history-request", nil
+}
+
+func (s *fakeSession) SendReadReceipts(_ context.Context, _ string, sender string, ids []string, _ time.Time) error {
+	if s.connector.readCalls != nil {
+		s.connector.readCalls <- append([]string(nil), ids...)
+	}
+	if sender == s.connector.failReadSender {
+		return errors.New("receipt failed")
+	}
+	return nil
 }

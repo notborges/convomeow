@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 13
+const schemaVersion = 14
 
 func (s *Store) initSchema(ctx context.Context) error {
 	var version int
@@ -92,6 +92,20 @@ END;
 CREATE INDEX messages_account_recent ON messages(account_id, occurred_at DESC, COALESCE(provider_order, '~') DESC, local_order DESC);
 CREATE INDEX messages_conversation_recent ON messages(conversation_id, occurred_at DESC, COALESCE(provider_order, '~') DESC, local_order DESC);
 CREATE INDEX messages_outbound_provider ON messages(account_id, provider_message_id) WHERE direction = 'outbound';
+CREATE TABLE message_receipts (
+ account_id TEXT NOT NULL REFERENCES accounts(id),
+ chat_id TEXT NOT NULL,
+ provider_message_id TEXT NOT NULL,
+ participant_id TEXT NOT NULL,
+ is_group INTEGER NOT NULL DEFAULT 0,
+ delivered_at TEXT,
+ read_at TEXT,
+ PRIMARY KEY(account_id, chat_id, provider_message_id, participant_id)
+);
+CREATE TABLE message_read_receipts (
+ message_id TEXT PRIMARY KEY REFERENCES messages(public_id) ON DELETE CASCADE,
+ read_at TEXT NOT NULL
+);
 CREATE TABLE message_replies (
  message_id TEXT PRIMARY KEY REFERENCES messages(public_id) ON DELETE CASCADE,
  provider_message_id TEXT NOT NULL,

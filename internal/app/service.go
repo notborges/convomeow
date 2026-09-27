@@ -694,6 +694,20 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		if event.Err != nil {
 			rt.setError(event.Err)
 		}
+	case core.EventReceipt:
+		if event.Receipt == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+		defer cancel()
+		conversations, err := s.repo.SaveReceipt(ctx, id, *event.Receipt)
+		if err != nil {
+			s.logger.Warn("save message receipt failed", "account_id", id, "error", err)
+			return
+		}
+		for _, conversationID := range conversations {
+			s.notifyConversation(id, conversationID)
+		}
 	case core.EventMessage:
 		if event.Message == nil {
 			return

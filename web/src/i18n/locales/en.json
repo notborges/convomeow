@@ -253,5 +253,21 @@
     "unavailable": "Original message is not saved",
     "newer": "Newer messages",
     "loading": "Loading original message…"
+  },
+  "receipts": {
+    "info": "Message info",
+    "delivered": "Delivered",
+    "read": "Read",
+    "sent": "Sent",
+    "unavailable": "Receipt details could not be loaded.",
+    "unknown": "No delivery or read receipts have been received.",
+    "groupNote": "Counts show the participants who sent receipts. The full recipient list is not known.",
+    "deliveredCount_one": "Delivered to {{count}} person",
+    "deliveredCount_other": "Delivered to {{count}} people",
+    "readCount_one": "Read by {{count}} person",
+    "readCount_other": "Read by {{count}} people",
+    "notReported": "Not reported",
+    "deliveredByRead": "Confirmed by read receipt",
+    "more": "More participants"
   }
 }

@@ -177,6 +177,28 @@ export default function DesignSystem() {
         <h2>{t(($) => $.chats.title)}</h2>
         {replySelected && <p role="status">{t(($) => $.reply.action)}</p>}
         <div className="catalog__messages">
+          {(["unknown", "delivered", "read", "partial_read"] as const).map(
+            (state) => (
+              <MessageBubble
+                key={state}
+                message={{
+                  ...sample,
+                  id: `receipt-${state}`,
+                  direction: "outbound",
+                  delivery: {
+                    state,
+                    group: state === "partial_read",
+                    delivered_count: state === "unknown" ? 0 : 2,
+                    read_count:
+                      state === "read" || state === "partial_read" ? 1 : 0,
+                  },
+                }}
+                grouped={false}
+                showSender={false}
+              />
+            ),
+          )}
+
           <MessageBubble
             message={{
               ...sample,

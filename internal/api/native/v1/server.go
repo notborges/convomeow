@@ -20,6 +20,8 @@ func New(service *app.Service, token string, browserAuth func(*http.Request) boo
 	s := &Server{service: service, authorized: func(r *http.Request) bool { return authorized(token, browserAuth, r) }}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/events", s.events)
+	register(mux, "/api/v1/messages/{id}/receipts", map[string]http.HandlerFunc{"GET": s.listReceipts})
+	register(mux, "/api/v1/conversations/{id}/read-receipts", map[string]http.HandlerFunc{"POST": s.sendReadReceipts})
 	register(mux, "/api/v1/conversations/{id}/history-requests", map[string]http.HandlerFunc{"POST": s.requestHistory})
 	register(mux, "/api/v1/accounts", map[string]http.HandlerFunc{"GET": s.listAccounts, "POST": s.createAccount})
 	register(mux, "/api/v1/accounts/{id}", map[string]http.HandlerFunc{"GET": s.getAccount})

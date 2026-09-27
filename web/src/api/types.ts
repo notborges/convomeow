@@ -42,7 +42,28 @@ export interface Reply {
   text?: string;
 }
 
+export interface DeliverySummary {
+  state:
+    | "unknown"
+    | "delivered"
+    | "read"
+    | "partial_delivered"
+    | "partial_read";
+  delivered_count: number;
+  read_count: number;
+  group: boolean;
+}
+
+export interface MessageReceipt {
+  display_name?: string;
+  participant_id: string;
+  delivered_at?: string;
+  read_at?: string;
+}
+
 export interface Message {
+  delivery?: DeliverySummary;
+  read_at?: string;
   reply?: Reply;
   id: string;
   account_id: string;

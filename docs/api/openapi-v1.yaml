@@ -650,6 +650,101 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/conversations/{id}/read-receipts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    post:
+      operationId: sendReadReceipts
+      summary: Send read receipts for selected incoming messages
+      description: >-
+        Explicit provider command. Reading messages through GET routes does not send
+        read receipts. Validates the whole batch before sending, then batches by sender.
+        Provider privacy settings still apply. Repeating successfully recorded IDs is safe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message_ids]
+              properties:
+                message_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items: {type: string}
+      responses:
+        '200':
+          description: Per-batch results, including partial failures. Inspect failed even on HTTP 200.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [read_message_ids, failed]
+                properties:
+                  read_message_ids:
+                    type: array
+                    items: {type: string}
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      required: [message_ids, code]
+                      properties:
+                        message_ids:
+                          type: array
+                          items: {type: string}
+                        code:
+                          type: string
+                          enum: [receipt_send_failed, receipt_record_failed]
+                          description: Recording can fail after the provider accepted a receipt.
+        '400':
+          description: Invalid batch or unsupported provider capability.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Account is not connected.
+  /api/v1/messages/{id}/receipts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      operationId: listMessageReceipts
+      summary: List observed recipient receipts for an outgoing message
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+        - name: cursor
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: Participants ordered by ID. An absent receipt does not prove a message is unread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageReceipt'
+                  next_cursor: {type: string}
+        '400':
+          description: Invalid query or incoming message.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/messages/{id}:
     parameters:
       - name: id
@@ -1109,10 +1204,38 @@ components:
           type: string
           maxLength: 512
           description: Quoted text or caption preview.
+    MessageReceipt:
+      type: object
+      required: [participant_id]
+      properties:
+        participant_id: {type: string}
+        display_name: {type: string}
+        delivered_at: {type: string, format: date-time}
+        read_at: {type: string, format: date-time}
+    DeliverySummary:
+      type: object
+      required: [state, delivered_count, read_count, group]
+      description: >-
+        Observed recipient activity, independent of send-job state. Reads count as
+        delivered without inventing a delivery timestamp. Groups expose observed counts;
+        the full recipient set is unknown, so group states remain partial.
+      properties:
+        state:
+          type: string
+          enum: [unknown, delivered, read, partial_delivered, partial_read]
+        delivered_count: {type: integer, minimum: 0}
+        read_count: {type: integer, minimum: 0}
+        group: {type: boolean}
     Message:
       type: object
       required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]
       properties:
+        delivery:
+          $ref: '#/components/schemas/DeliverySummary'
+        read_at:
+          type: string
+          format: date-time
+          description: Time the explicit read command succeeded for this incoming message. Does not track reads on other devices.
         reply:
           $ref: '#/components/schemas/Reply'
         id:

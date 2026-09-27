@@ -803,3 +803,47 @@ button.reply-preview:focus-visible {
     padding-inline-end: 4px;
   }
 }
+
+.delivery-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.delivery-status--read {
+  color: var(--receipt-read);
+}
+.message-info {
+  width: min(460px, calc(100vw - 32px));
+}
+.message-info__sent,
+.receipt-list dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+.message-info dd {
+  margin: 0;
+  text-align: end;
+}
+.message-info dt,
+.message-info__note {
+  color: var(--text-secondary);
+}
+.message-info__note {
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.receipt-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-5) 0;
+}
+.receipt-list li {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border);
+}
+.receipt-list strong {
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}

@@ -2,15 +2,17 @@ import {
   ArrowDown01Icon,
   ArrowTurnBackwardIcon,
   Copy01Icon,
-  Tick01Icon,
+  InformationCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "../../api/types";
-import { formatDate, kindLabel, stateLabel } from "../../i18n/format";
+import { formatDate, kindLabel } from "../../i18n/format";
 import { ActionMenu } from "../../ui/ActionMenu";
 import { AttachmentView } from "./AttachmentView";
+import { DeliveryStatus } from "./DeliveryStatus";
+import { MessageInfo } from "./MessageInfo";
 import { ReplyPreview } from "./ReplyPreview";
 
 function messageTime(value: string): string {
@@ -36,6 +38,7 @@ export function MessageBubble({
   replySender?: string;
 }) {
   const { t } = useTranslation();
+  const [infoOpen, setInfoOpen] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
@@ -51,8 +54,6 @@ export function MessageBubble({
 
   const outgoing = message.direction === "outbound";
   const content = message.content?.text || message.content?.caption;
-  const state =
-    outgoing && message.state !== "sent" ? stateLabel(message.state) : "";
   return (
     <article
       id={`message-${message.id}`}
@@ -68,7 +69,11 @@ export function MessageBubble({
         }
       >
         {onReply &&
-          (message.state === "sent" || message.state === "received") && (
+          (message.state === "sent" ||
+            message.state === "received" ||
+            (outgoing &&
+              message.delivery &&
+              message.delivery.state !== "unknown")) && (
             <ActionMenu
               className="message-actions"
               label={t(($) => $.message.actions)}
@@ -86,6 +91,22 @@ export function MessageBubble({
                   movesFocus: true,
                   onSelect: () => onReply(message),
                 },
+                ...(outgoing
+                  ? [
+                      {
+                        id: "info",
+                        label: t(($) => $.receipts.info),
+                        icon: (
+                          <HugeiconsIcon
+                            icon={InformationCircleIcon}
+                            size={20}
+                          />
+                        ),
+                        movesFocus: true,
+                        onSelect: () => setInfoOpen(true),
+                      },
+                    ]
+                  : []),
                 ...(content
                   ? [
                       {
@@ -142,17 +163,12 @@ export function MessageBubble({
           <time dateTime={message.occurred_at}>
             {messageTime(message.occurred_at)}
           </time>
-          {outgoing && message.state === "sent" ? (
-            <HugeiconsIcon
-              icon={Tick01Icon}
-              size={13}
-              aria-label={t(($) => $.message.sent)}
-            />
-          ) : (
-            state && <span>{state}</span>
-          )}
+          {outgoing && <DeliveryStatus message={message} />}
         </div>
       </div>
+      {infoOpen && (
+        <MessageInfo message={message} onClose={() => setInfoOpen(false)} />
+      )}
     </article>
   );
 }

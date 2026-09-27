@@ -5,6 +5,7 @@ import type {
   Conversation,
   LoginAttempt,
   Message,
+  MessageReceipt,
   Page,
   Problem,
 } from "./types";
@@ -124,6 +125,13 @@ export const api = {
           after_cursor: position?.after,
         },
       ),
+    ),
+  receipts: (id: string, cursor?: string) =>
+    request<Page<MessageReceipt>>(
+      pageURL(`/api/v1/messages/${encodeURIComponent(id)}/receipts`, {
+        cursor,
+        limit: "50",
+      }),
     ),
   message: (id: string) =>
     request<Message>(`/api/v1/messages/${encodeURIComponent(id)}`),

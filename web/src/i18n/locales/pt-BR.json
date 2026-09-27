@@ -253,5 +253,21 @@
     "unavailable": "A mensagem original não está salva",
     "newer": "Mensagens mais recentes",
     "loading": "Carregando mensagem original…"
+  },
+  "receipts": {
+    "info": "Dados da mensagem",
+    "delivered": "Entregue",
+    "read": "Lida",
+    "sent": "Enviada",
+    "unavailable": "Não foi possível carregar os recibos.",
+    "unknown": "Nenhum recibo de entrega ou leitura foi recebido.",
+    "groupNote": "As contagens mostram os participantes que enviaram recibos. A lista completa de destinatários não é conhecida.",
+    "deliveredCount_one": "Entregue a {{count}} pessoa",
+    "deliveredCount_other": "Entregue a {{count}} pessoas",
+    "readCount_one": "Lida por {{count}} pessoa",
+    "readCount_other": "Lida por {{count}} pessoas",
+    "notReported": "Não informado",
+    "deliveredByRead": "Confirmada pelo recibo de leitura",
+    "more": "Mais participantes"
   }
 }

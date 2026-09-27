@@ -114,6 +114,16 @@ func (s *session) closeHistoryQueue() {
 }
 
 func (s *session) handleEvent(evt any) {
+	if receipt, ok := evt.(*events.Receipt); ok && receipt.SenderAlt.IsEmpty() && receipt.Sender.Server == types.HiddenUserServer && s.client.Store != nil && s.client.Store.LIDs != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		pn, err := s.client.Store.LIDs.GetPNForLID(ctx, receipt.Sender.ToNonAD())
+		cancel()
+		if err == nil && !pn.IsEmpty() {
+			copy := *receipt
+			copy.SenderAlt = pn
+			evt = &copy
+		}
+	}
 	if history, ok := evt.(*events.HistorySync); ok {
 		s.historyMu.Lock()
 		if !s.historyClosed {
@@ -236,6 +246,14 @@ func recipientJID(recipient string) (types.JID, error) {
 
 func translateEvent(emit func(core.Event), evt any) {
 	switch e := evt.(type) {
+	case *events.Receipt:
+		if receipt := translateReceipt(e); receipt != nil {
+			for start := 0; start < len(receipt.MessageIDs); start += 500 {
+				batch := *receipt
+				batch.MessageIDs = receipt.MessageIDs[start:min(start+500, len(receipt.MessageIDs))]
+				emit(core.Event{Type: core.EventReceipt, Receipt: &batch})
+			}
+		}
 	case *events.Contact, *events.PushName, *events.BusinessName:
 		emit(core.Event{Type: core.EventContactsChanged})
 	case *events.PairSuccess:
