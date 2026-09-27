@@ -38,6 +38,7 @@ export default function DesignSystem() {
     occurred_at: "2026-01-01T10:00:00Z",
   };
 
+  const [ownReaction, setOwnReaction] = useState("❤️");
   const [replySelected, setReplySelected] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("chats");
@@ -205,6 +206,23 @@ export default function DesignSystem() {
         <h2>{t(($) => $.chats.title)}</h2>
         {replySelected && <p role="status">{t(($) => $.reply.action)}</p>}
         <div className="catalog__messages">
+          <MessageBubble
+            message={{
+              ...sample,
+              id: "reaction-example",
+              reactions: [
+                { emoji: "👍", count: 3, own: ownReaction === "👍" },
+                ...(ownReaction && ownReaction !== "👍"
+                  ? [{ emoji: ownReaction, count: 1, own: true }]
+                  : []),
+              ],
+            }}
+            grouped={false}
+            showSender={false}
+            onReply={() => setReplySelected(true)}
+            onReact={async (emoji) => setOwnReaction(emoji)}
+          />
+
           {(["unknown", "delivered", "read", "partial_read"] as const).map(
             (state) => (
               <MessageBubble

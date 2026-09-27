@@ -5,6 +5,7 @@ import type {
   Conversation,
   LoginAttempt,
   Message,
+  MessageReaction,
   MessageReceipt,
   Page,
   Problem,
@@ -136,6 +137,17 @@ export const api = {
           after_cursor: position?.after,
         },
       ),
+    ),
+  reactions: (id: string, cursor?: string) =>
+    request<Page<MessageReaction>>(
+      pageURL(`/api/v1/messages/${encodeURIComponent(id)}/reactions`, {
+        cursor,
+      }),
+    ),
+  setReaction: (id: string, emoji: string) =>
+    request<Message>(
+      `/api/v1/messages/${encodeURIComponent(id)}/reaction`,
+      emoji ? { method: "PUT", ...json({ emoji }) } : { method: "DELETE" },
     ),
   receipts: (id: string, cursor?: string) =>
     request<Page<MessageReceipt>>(

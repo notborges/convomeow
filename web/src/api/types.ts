@@ -61,7 +61,20 @@ export interface MessageReceipt {
   read_at?: string;
 }
 
+export interface ReactionSummary {
+  emoji: string;
+  count: number;
+  own: boolean;
+}
+export interface MessageReaction {
+  participant_id: string;
+  display_name?: string;
+  is_own: boolean;
+  emoji: string;
+  at: string;
+}
 export interface Message {
+  reactions?: ReactionSummary[];
   delivery?: DeliverySummary;
   read_at?: string;
   reply?: Reply;

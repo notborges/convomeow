@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@base-ui/react": "latest",
+    "@emoji-mart/data": "latest",
     "@fontsource-variable/inter": "latest",
     "@hugeicons/core-free-icons": "latest",
     "@hugeicons/react": "latest",
     "@tanstack/react-query": "latest",
+    "emoji-mart": "latest",
     "i18next": "latest",
     "motion": "latest",
     "qrcode.react": "latest",

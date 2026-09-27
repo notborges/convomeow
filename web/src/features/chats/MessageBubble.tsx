@@ -1,19 +1,17 @@
-import {
-  ArrowDown01Icon,
-  ArrowTurnBackwardIcon,
-  Copy01Icon,
-  InformationCircleIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ApiError } from "../../api/client";
 import type { Message } from "../../api/types";
+import { errorKey } from "../../i18n/errors";
 import { formatDate, kindLabel } from "../../i18n/format";
-import { ActionMenu } from "../../ui/ActionMenu";
+import { Button } from "../../ui/Button";
 import { AttachmentView } from "./AttachmentView";
 import { DeliveryStatus } from "./DeliveryStatus";
+import { MessageActions } from "./MessageActions";
 import { MessageInfo } from "./MessageInfo";
+import { MessageReactions } from "./MessageReactions";
 import { ReplyPreview } from "./ReplyPreview";
+import { useMessageReaction } from "./useMessageReaction";
 
 function messageTime(value: string): string {
   return formatDate(value, {
@@ -29,6 +27,7 @@ export function MessageBubble({
   onReply,
   onJump,
   replySender,
+  onReact,
 }: {
   message: Message;
   showSender: boolean;
@@ -36,12 +35,11 @@ export function MessageBubble({
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
   replySender?: string;
+  onReact?: (emoji: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [infoOpen, setInfoOpen] = useState(false);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
-    "idle",
-  );
+  const reaction = useMessageReaction(message, onReact);
   const firstImage = message.attachments?.find(
     (item) => item.kind === "image" || item.kind === "sticker",
   );
@@ -74,63 +72,12 @@ export function MessageBubble({
             (outgoing &&
               message.delivery &&
               message.delivery.state !== "unknown")) && (
-            <ActionMenu
-              className="message-actions"
-              label={t(($) => $.message.actions)}
-              align="start"
-              side={outgoing ? "left" : "right"}
-              onOpen={() => setCopyState("idle")}
-              triggerIcon={<HugeiconsIcon icon={ArrowDown01Icon} size={19} />}
-              actions={[
-                {
-                  id: "reply",
-                  label: t(($) => $.reply.action),
-                  icon: (
-                    <HugeiconsIcon icon={ArrowTurnBackwardIcon} size={20} />
-                  ),
-                  movesFocus: true,
-                  onSelect: () => onReply(message),
-                },
-                ...(outgoing
-                  ? [
-                      {
-                        id: "info",
-                        label: t(($) => $.receipts.info),
-                        icon: (
-                          <HugeiconsIcon
-                            icon={InformationCircleIcon}
-                            size={20}
-                          />
-                        ),
-                        movesFocus: true,
-                        onSelect: () => setInfoOpen(true),
-                      },
-                    ]
-                  : []),
-                ...(content
-                  ? [
-                      {
-                        id: "copy",
-                        label:
-                          copyState === "copied"
-                            ? t(($) => $.message.copied)
-                            : copyState === "failed"
-                              ? t(($) => $.message.copyFailed)
-                              : t(($) => $.message.copy),
-                        icon: <HugeiconsIcon icon={Copy01Icon} size={20} />,
-                        closeOnSelect: false,
-                        onSelect: async () => {
-                          try {
-                            await navigator.clipboard.writeText(content);
-                            setCopyState("copied");
-                          } catch {
-                            setCopyState("failed");
-                          }
-                        },
-                      },
-                    ]
-                  : []),
-              ]}
+            <MessageActions
+              message={message}
+              onReply={onReply}
+              onInfo={() => setInfoOpen(true)}
+              onReact={(emoji) => reaction.mutate(emoji)}
+              busy={reaction.isPending}
             />
           )}
         {showSender && message.sender_id && !outgoing && (
@@ -165,7 +112,26 @@ export function MessageBubble({
           </time>
           {outgoing && <DeliveryStatus message={message} />}
         </div>
+        <MessageReactions message={message} />
       </div>
+      {reaction.isPending && (
+        <span className="sr-only" role="status">
+          {t(($) => $.reactions.sending)}
+        </span>
+      )}
+      {reaction.isError && (
+        <div className="message-reaction-error" role="alert">
+          <span>
+            {reaction.error instanceof ApiError &&
+            reaction.error.code !== "reaction_unconfirmed"
+              ? t(($) => $.errors[errorKey(reaction.error)])
+              : t(($) => $.reactions.failed)}
+          </span>
+          <Button variant="text" onClick={() => reaction.refresh()}>
+            {t(($) => $.reactions.refresh)}
+          </Button>
+        </div>
+      )}
       {infoOpen && (
         <MessageInfo message={message} onClose={() => setInfoOpen(false)} />
       )}

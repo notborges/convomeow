@@ -1,7 +1,7 @@
 import { Menu } from "@base-ui/react/menu";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, type Ref, useRef } from "react";
 import { IconButton } from "./Button";
 
 type Action = {
@@ -11,6 +11,8 @@ type Action = {
   onSelect: () => void;
   movesFocus?: boolean;
   closeOnSelect?: boolean;
+  disabled?: boolean;
+  selected?: boolean;
 };
 
 export function ActionMenu({
@@ -21,6 +23,8 @@ export function ActionMenu({
   triggerIcon,
   side = "bottom",
   onOpen,
+  quickActions = [],
+  triggerRef,
 }: {
   label: string;
   actions: Action[];
@@ -29,6 +33,8 @@ export function ActionMenu({
   triggerIcon?: ReactNode;
   side?: "left" | "right" | "bottom";
   onOpen?: () => void;
+  quickActions?: Action[];
+  triggerRef?: Ref<HTMLButtonElement>;
 }) {
   const restoreFocus = useRef(true);
   if (actions.length === 0) return null;
@@ -42,7 +48,11 @@ export function ActionMenu({
         }
       }}
     >
-      <Menu.Trigger render={<IconButton label={label} className={className} />}>
+      <Menu.Trigger
+        render={
+          <IconButton ref={triggerRef} label={label} className={className} />
+        }
+      >
         {triggerIcon ?? <HugeiconsIcon icon={MoreHorizontalIcon} size={18} />}
       </Menu.Trigger>
       <Menu.Portal>
@@ -57,22 +67,45 @@ export function ActionMenu({
             className="action-menu"
             finalFocus={() => restoreFocus.current}
           >
-            {actions.map((action) => (
-              <Menu.Item
-                key={action.id}
-                className="action-menu__item"
-                closeOnClick={action.closeOnSelect ?? true}
-                onClick={() => {
-                  restoreFocus.current = !action.movesFocus;
-                  action.onSelect();
-                }}
-              >
-                <span className="action-menu__icon" aria-hidden="true">
-                  {action.icon}
-                </span>
-                <span>{action.label}</span>
-              </Menu.Item>
-            ))}
+            {quickActions.length > 0 && (
+              <Menu.Group className="action-menu__quick">
+                {quickActions.map((action) => (
+                  <Menu.Item
+                    key={action.id}
+                    className="action-menu__quick-item"
+                    aria-label={action.label}
+                    title={action.label}
+                    disabled={action.disabled}
+                    data-selected={action.selected || undefined}
+                    onClick={() => {
+                      restoreFocus.current = !action.movesFocus;
+                      action.onSelect();
+                    }}
+                  >
+                    {action.icon}
+                  </Menu.Item>
+                ))}
+              </Menu.Group>
+            )}
+            <div className="action-menu__list">
+              {actions.map((action) => (
+                <Menu.Item
+                  key={action.id}
+                  className="action-menu__item"
+                  disabled={action.disabled}
+                  closeOnClick={action.closeOnSelect ?? true}
+                  onClick={() => {
+                    restoreFocus.current = !action.movesFocus;
+                    action.onSelect();
+                  }}
+                >
+                  <span className="action-menu__icon" aria-hidden="true">
+                    {action.icon}
+                  </span>
+                  <span>{action.label}</span>
+                </Menu.Item>
+              ))}
+            </div>
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

@@ -277,5 +277,52 @@
     "personRecording": "{{name}} is recording audio…",
     "others_one": "{{count}} other person",
     "others_other": "{{count}} other people"
+  },
+  "emojiPicker": {
+    "search": "Search",
+    "search_no_results_1": "Oh no!",
+    "search_no_results_2": "That emoji couldn’t be found",
+    "pick": "Pick an emoji…",
+    "add_custom": "Add custom emoji",
+    "categories": {
+      "activity": "Activity",
+      "custom": "Custom",
+      "flags": "Flags",
+      "foods": "Food & Drink",
+      "frequent": "Frequently used",
+      "nature": "Animals & Nature",
+      "objects": "Objects",
+      "people": "Smileys & People",
+      "places": "Travel & Places",
+      "search": "Search Results",
+      "symbols": "Symbols"
+    },
+    "skins": {
+      "choose": "Choose default skin tone",
+      "1": "Default",
+      "2": "Light",
+      "3": "Medium-Light",
+      "4": "Medium",
+      "5": "Medium-Dark",
+      "6": "Dark"
+    }
+  },
+  "reactions": {
+    "action": "React",
+    "choose": "Choose an emoji",
+    "moreEmoji": "More emoji",
+    "remove": "Remove reaction",
+    "title": "Reactions",
+    "summary": "{{emoji}} · {{count}} reactions. View participants",
+    "ownSummary": "{{emoji}} · {{count}} reactions, including yours. View participants",
+    "chooseEmoji": "React with {{emoji}}",
+    "you": "You",
+    "empty": "No reactions yet",
+    "more": "Load more",
+    "unavailable": "Could not load reactions",
+    "failed": "Could not confirm your reaction. Refresh before trying again.",
+    "sending": "Sending reaction…",
+    "refresh": "Refresh reactions",
+    "pickerFailed": "Could not load emoji. Try again."
   }
 }
