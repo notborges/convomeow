@@ -75,7 +75,6 @@ export function Dialog({
       <header className="dialog__header">
         <div>
           <h2 id={`${id}-title`}>{title}</h2>
-          {description && <p id={`${id}-description`}>{description}</p>}
         </div>
         {actions}
         <IconButton
@@ -85,6 +84,11 @@ export function Dialog({
           <HugeiconsIcon icon={Cancel01Icon} size={20} />
         </IconButton>
       </header>
+      {description && (
+        <p className="dialog__description" id={`${id}-description`}>
+          {description}
+        </p>
+      )}
       <div className="dialog__body">{children}</div>
     </motion.dialog>,
     document.body,
