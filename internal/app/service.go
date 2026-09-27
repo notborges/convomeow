@@ -15,6 +15,8 @@ import (
 )
 
 type runtimeAccount struct {
+	changeMu        sync.Mutex
+	changeAt        time.Time
 	reactionMu      sync.Mutex
 	reactionAt      time.Time
 	activity        accountActivity
@@ -169,7 +171,7 @@ func (s *Service) CreateAccount(ctx context.Context, label, provider, connection
 	s.accounts[a.ID] = &runtimeAccount{account: a, state: "needs_login", loginState: "idle"}
 	s.mu.Unlock()
 	s.publish(Notification{Type: AccountsChanged, AccountID: a.ID})
-	return core.AccountStatus{Account: a, State: "needs_login"}, nil
+	return core.AccountStatus{Account: a, State: "needs_login", Capabilities: s.capabilities()}, nil
 }
 
 func (s *Service) ListAccounts() []core.AccountStatus {
@@ -181,7 +183,7 @@ func (s *Service) ListAccounts() []core.AccountStatus {
 	s.mu.RUnlock()
 	result := make([]core.AccountStatus, 0, len(runtimes))
 	for _, rt := range runtimes {
-		result = append(result, rt.status())
+		result = append(result, s.accountStatus(rt))
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Label < result[j].Label })
 	return result
@@ -192,7 +194,7 @@ func (s *Service) Account(id string) (core.AccountStatus, error) {
 	if err != nil {
 		return core.AccountStatus{}, err
 	}
-	return rt.status(), nil
+	return s.accountStatus(rt), nil
 }
 
 func (s *Service) LoginStatus(id, attemptID string) (core.LoginStatus, error) {
@@ -332,6 +334,9 @@ func (s *Service) finishLogin(id string, rt *runtimeAccount, session core.Sessio
 }
 
 func (s *Service) CreateConversation(ctx context.Context, accountID string, target core.ConversationTarget) (core.Conversation, bool, error) {
+	if err := s.requireCapability("start_conversation"); err != nil {
+		return core.Conversation{}, false, err
+	}
 	if _, err := s.runtime(accountID); err != nil {
 		return core.Conversation{}, false, err
 	}
@@ -354,7 +359,7 @@ func (s *Service) CreateConversation(ctx context.Context, accountID string, targ
 			return core.Conversation{}, false, err
 		}
 		contact, err := s.Contact(ctx, accountID, chatID)
-		if err != nil && !errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrNotConnected) {
+		if err != nil && !errors.Is(err, core.ErrNotFound) && !errors.Is(err, core.ErrNotConnected) && !errors.Is(err, core.ErrUnsupported) {
 			return core.Conversation{}, false, err
 		}
 		if err == nil && contact.AlternateID != "" {
@@ -408,7 +413,7 @@ func (s *Service) ListConversations(ctx context.Context, accountID string, befor
 }
 
 func (s *Service) enrichConversation(ctx context.Context, conversation *core.Conversation) {
-	if conversation.Kind != "direct" {
+	if conversation.Kind != "direct" || s.requireCapability("read_contacts") != nil {
 		return
 	}
 	rt, err := s.runtime(conversation.AccountID)
@@ -430,6 +435,9 @@ func (s *Service) enrichConversation(ctx context.Context, conversation *core.Con
 }
 
 func (s *Service) Contacts(ctx context.Context, accountID string) ([]core.Contact, error) {
+	if err := s.requireCapability("read_contacts"); err != nil {
+		return nil, err
+	}
 	rt, err := s.runtime(accountID)
 	if err != nil {
 		return nil, err
@@ -444,6 +452,9 @@ func (s *Service) Contacts(ctx context.Context, accountID string) ([]core.Contac
 }
 
 func (s *Service) Contact(ctx context.Context, accountID, providerID string) (core.Contact, error) {
+	if err := s.requireCapability("read_contacts"); err != nil {
+		return core.Contact{}, err
+	}
 	rt, err := s.runtime(accountID)
 	if err != nil {
 		return core.Contact{}, err
@@ -462,6 +473,9 @@ func (s *Service) SendText(ctx context.Context, conversationID, text, key string
 }
 
 func (s *Service) SendTextReply(ctx context.Context, conversationID, text, key, replyID string) (core.Message, error) {
+	if err := s.requireCapability("send_text"); err != nil {
+		return core.Message{}, err
+	}
 	requestedText := text
 	text = strings.TrimSpace(text)
 	if text == "" || len(text) > 4096 {
@@ -705,6 +719,8 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		}
 	case core.EventChatPresence:
 		s.receivePresence(id, event.Presence)
+	case core.EventMessageChange:
+		s.receiveMessageChange(id, event.Change)
 	case core.EventReaction:
 		s.receiveReaction(id, event.Reaction)
 	case core.EventReceipt:

@@ -124,6 +124,9 @@ func (s *Service) scanMedia() {
 }
 
 func (s *Service) queueMedia(id string) bool {
+	if s.requireCapability("read_media") != nil {
+		return false
+	}
 	if s.media.queue == nil || s.ctx.Err() != nil {
 		return false
 	}
@@ -157,6 +160,9 @@ func (s *Service) mediaWorker() {
 }
 
 func (s *Service) processMedia(id string) {
+	if s.requireCapability("read_media") != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Minute)
 	defer cancel()
 	record, err := s.repo.GetMedia(ctx, id)
@@ -411,6 +417,9 @@ func (s *Service) OpenMedia(ctx context.Context, id string, offset, length int64
 	}
 	if len(record.ProviderRef) == 0 {
 		return nil, record, false, core.ErrMediaUnavailable
+	}
+	if err := s.requireCapability("read_media"); err != nil {
+		return nil, record, false, err
 	}
 	if record.DeclaredSize > uint64(s.media.options.MaxFileBytes) {
 		return nil, record, false, core.ErrMediaTooLarge

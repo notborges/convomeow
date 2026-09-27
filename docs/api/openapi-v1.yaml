@@ -927,6 +927,75 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+    patch:
+      operationId: editMessage
+      summary: Edit a sent message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text: {type: string, minLength: 1, description: Up to 4096 UTF-8 bytes.}
+      responses:
+        '200':
+          description: Updated message after provider acknowledgment.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '400': {description: Invalid request.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Message is ineligible or account is disconnected.}
+        '422': {description: Connection does not support editing.}
+        '502': {description: Change outcome is unconfirmed. Refresh before retrying.}
+  /api/v1/messages/{id}/revoke:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    post:
+      operationId: revokeMessage
+      summary: Request deletion for everyone
+      description: ConvoMeow retains saved content and marks the message as deleted.
+      responses:
+        '200':
+          description: Message with deletion marker after provider acknowledgment.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Message'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Message is ineligible or account is disconnected.}
+        '422': {description: Connection does not support revocation.}
+        '502': {description: Change outcome is unconfirmed. Refresh before retrying.}
+  /api/v1/messages/{id}/revisions:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: listMessageRevisions
+      summary: Read saved message history
+      description: First saved text and received changes, newest first. Unreceived versions are unavailable.
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Saved revisions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/MessageRevision'}
+                  next_cursor: {type: string}
+        '400': {description: Invalid pagination.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /api/v1/attachments/{id}:
     parameters:
       - $ref: '#/components/parameters/AttachmentID'
@@ -1162,6 +1231,7 @@ components:
         last_error:
           type: string
         capabilities:
+          description: Implemented connection features. Missing capabilities are unsupported; message actions apply additional eligibility rules.
           type: array
           items:
             type: string
@@ -1353,6 +1423,7 @@ components:
       type: object
       required: [kind]
       properties:
+        deleted: {type: boolean, description: The quoted message was deleted by the provider; saved quote text is retained.}
         message_id:
           type: string
           description: Saved original message ID, omitted when the original is not available locally.
@@ -1404,13 +1475,41 @@ components:
           type: string
           description: Opaque participant identity. The connected account uses the stable value self across linked devices.
         display_name: {type: string}
+        avatar_url:
+          type: string
+          description: Authenticated avatar URL, omitted when the provider does not support avatars.
         is_own: {type: boolean}
         emoji: {type: string}
         at: {type: string, format: date-time}
+    MessageRevision:
+      type: object
+      required: [id, kind, at]
+      properties:
+        id: {type: string}
+        kind: {type: string, enum: [original, edit, revoke]}
+        text: {type: string}
+        at: {type: string, format: date-time}
+    MessageActions:
+      type: object
+      required: [reply, react, edit, revoke, receipts]
+      properties:
+        reply: {type: boolean}
+        react: {type: boolean}
+        edit: {type: boolean}
+        revoke: {type: boolean}
+        receipts: {type: boolean}
+        edit_until: {type: string, format: date-time}
+        revoke_until: {type: string, format: date-time}
     Message:
       type: object
       required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]
       properties:
+        actions: {$ref: '#/components/schemas/MessageActions'}
+        edited_at: {type: string, format: date-time}
+        deleted_at:
+          type: string
+          format: date-time
+          description: Provider deletion time. Saved content and attachments remain available.
         reactions:
           type: array
           description: Current observed reaction counts. Omitted when empty. History coverage depends on provider data.

@@ -54,3 +54,15 @@ Message responses include `reactions` summaries with `emoji`, `count`, and `own`
 Commands set the requested state and do not toggle it. There is no automatic retry or durable reaction command queue. A `502 reaction_unconfirmed` response can follow a provider timeout or a local recording failure after acknowledgment. Refresh before retrying; a new request sets the desired state again.
 
 Live events and imported history update the same stored reaction state. Removal timestamps prevent older history from restoring removed reactions. `conversations.changed` notifications invalidate message and participant queries. Existing local messages acquire old reactions only when the provider supplies those reactions again; adding this feature does not request a resync.
+
+## Capabilities and message changes
+
+Account `capabilities` describe the connection's implemented features. Missing capabilities mean unsupported. Message `actions` refine support for the saved message, including ownership, type, deletion and provider deadlines. Check these fields instead of inferring support from `provider`; command endpoints enforce the same restrictions. Support does not guarantee delivery, and disconnected accounts cannot send commands.
+
+Use `PATCH /api/v1/messages/{id}` with `{"text":"Updated text"}` to edit a message. Use `POST /api/v1/messages/{id}/revoke` to request deletion for everyone. Both return the updated message after acknowledgment. WhatsApp linked accounts currently allow outgoing text edits within 15 minutes and outgoing revocations within a conservative 48-hour window. Other message types can receive caption edits but do not offer an outgoing edit action yet.
+
+ConvoMeow retains saved content. `deleted_at` marks provider deletion without removing saved text, attachments or reactions. `edited_at` marks the latest received edit; `occurred_at` stays unchanged. `GET /api/v1/messages/{id}/revisions` returns the first saved text and received edits/deletions, newest first, with `limit` and `cursor` pagination. Versions never received cannot be reconstructed. Replayed events and chat aliases are deduplicated in the history response.
+
+Unsupported commands return `422 unsupported_operation`; an ineligible message returns `409 conflict`. A `502 message_change_unconfirmed` means the provider outcome or local recording could not be confirmed. Refresh the message before retrying. Commands are not retried automatically.
+
+Live WhatsApp checks still needed: text edits, caption edits received from another device, delete-for-everyone, and edit/deletion history returned after reconnecting. Automated checks use synthetic messages.

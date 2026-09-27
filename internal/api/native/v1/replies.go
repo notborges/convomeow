@@ -80,7 +80,7 @@ func (s *Server) messageWindow(w http.ResponseWriter, r *http.Request, limit int
 	}
 	items := make([]messageResponse, 0, len(messages))
 	for _, m := range messages {
-		items = append(items, messageFromCore(m))
+		items = append(items, s.messageFromCore(m))
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items    []messageResponse `json:"items"`

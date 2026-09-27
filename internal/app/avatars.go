@@ -104,6 +104,9 @@ func (s *Service) startAvatarWorkers() {
 }
 
 func (s *Service) requestAvatarScan(accountID string) {
+	if s.requireCapability("read_avatars") != nil {
+		return
+	}
 	if s.avatars.scans == nil {
 		return
 	}
@@ -207,6 +210,9 @@ func (s *Service) avatarNeedsRefresh(ctx context.Context, accountID, providerID 
 }
 
 func (s *Service) Avatar(ctx context.Context, accountID, providerID string) (core.Avatar, error) {
+	if err := s.requireCapability("read_avatars"); err != nil {
+		return core.Avatar{}, err
+	}
 	rt, err := s.runtime(accountID)
 	if err != nil {
 		return core.Avatar{}, err
@@ -309,6 +315,9 @@ func (s *Service) refreshAvatar(ctx context.Context, accountID, providerID strin
 }
 
 func (s *Service) fetchAndStoreAvatar(ctx context.Context, accountID, providerID string) (core.Avatar, error) {
+	if err := s.requireCapability("read_avatars"); err != nil {
+		return core.Avatar{}, err
+	}
 	rt, err := s.runtime(accountID)
 	if err != nil {
 		return core.Avatar{}, err

@@ -19,6 +19,8 @@ type Server struct {
 func New(service *app.Service, token string, browserAuth func(*http.Request) bool) http.Handler {
 	s := &Server{service: service, authorized: func(r *http.Request) bool { return authorized(token, browserAuth, r) }}
 	mux := http.NewServeMux()
+	register(mux, "/api/v1/messages/{id}/revisions", map[string]http.HandlerFunc{"GET": s.messageRevisions})
+	register(mux, "/api/v1/messages/{id}/revoke", map[string]http.HandlerFunc{"POST": s.revokeMessage})
 	register(mux, "/api/v1/conversations/{id}/presence", map[string]http.HandlerFunc{"POST": s.sendPresence})
 	mux.HandleFunc("GET /api/v1/events", s.events)
 	register(mux, "/api/v1/messages/{id}/reaction", map[string]http.HandlerFunc{"PUT": s.setReaction, "DELETE": s.setReaction})
@@ -42,7 +44,7 @@ func New(service *app.Service, token string, browserAuth func(*http.Request) boo
 	register(mux, "/api/v1/conversations/{id}/avatar", map[string]http.HandlerFunc{"GET": s.getConversationAvatar})
 	register(mux, "/api/v1/conversations/{id}/messages", map[string]http.HandlerFunc{"GET": s.listConversationMessages, "POST": s.sendMessage})
 	register(mux, "/api/v1/messages", map[string]http.HandlerFunc{"GET": s.listMessages})
-	register(mux, "/api/v1/messages/{id}", map[string]http.HandlerFunc{"GET": s.getMessage})
+	register(mux, "/api/v1/messages/{id}", map[string]http.HandlerFunc{"GET": s.getMessage, "PATCH": s.editMessage})
 	register(mux, "/api/v1/attachments/{id}", map[string]http.HandlerFunc{"GET": s.getAttachment})
 	register(mux, "/api/v1/attachments/{id}/content", map[string]http.HandlerFunc{"GET": s.getAttachmentContent})
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +148,7 @@ func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	writeJSON(w, status, conversationFromCore(conversation))
+	writeJSON(w, status, s.conversationFromCore(conversation))
 }
 
 func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +169,7 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]conversationResponse, 0, len(conversations))
 	for _, conversation := range conversations {
-		items = append(items, conversationFromCore(conversation))
+		items = append(items, s.conversationFromCore(conversation))
 	}
 	writeJSON(w, http.StatusOK, pageResponse[conversationResponse]{Items: items, NextCursor: next})
 }
@@ -178,7 +180,7 @@ func (s *Server) getConversation(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, conversationFromCore(conversation))
+	writeJSON(w, http.StatusOK, s.conversationFromCore(conversation))
 }
 
 func (s *Server) listConversationMessages(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +197,7 @@ func (s *Server) listConversationMessages(w http.ResponseWriter, r *http.Request
 		respondError(w, r, err)
 		return
 	}
-	writeMessagesPage(w, messages, limit)
+	s.writeMessagesPage(w, messages, limit)
 }
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +245,7 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 	if status == http.StatusAccepted {
 		w.Header().Set("Retry-After", "2")
 	}
-	writeJSON(w, status, messageFromCore(message))
+	writeJSON(w, status, s.messageFromCore(message))
 }
 
 func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +263,7 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	writeMessagesPage(w, messages, limit)
+	s.writeMessagesPage(w, messages, limit)
 }
 
 func (s *Server) getMessage(w http.ResponseWriter, r *http.Request) {
@@ -270,10 +272,10 @@ func (s *Server) getMessage(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, messageFromCore(message))
+	writeJSON(w, http.StatusOK, s.messageFromCore(message))
 }
 
-func writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int) {
+func (s *Server) writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int) {
 	next := ""
 	if len(messages) > limit {
 		messages = messages[:limit]
@@ -282,7 +284,7 @@ func writeMessagesPage(w http.ResponseWriter, messages []core.Message, limit int
 	}
 	items := make([]messageResponse, 0, len(messages))
 	for _, message := range messages {
-		items = append(items, messageFromCore(message))
+		items = append(items, s.messageFromCore(message))
 	}
 	writeJSON(w, http.StatusOK, pageResponse[messageResponse]{Items: items, NextCursor: next})
 }

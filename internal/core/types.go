@@ -50,12 +50,14 @@ type Account struct {
 }
 
 type AccountStatus struct {
+	Capabilities []string `json:"capabilities"`
 	Account
 	State     string `json:"state"`
 	LastError string `json:"last_error,omitempty"`
 }
 
 type Reply struct {
+	Deleted           bool        `json:"deleted,omitempty"`
 	MessageID         string      `json:"message_id,omitempty"`
 	ProviderMessageID string      `json:"-"`
 	SenderID          string      `json:"sender_id,omitempty"`
@@ -88,6 +90,8 @@ type DeliverySummary struct {
 }
 
 type Message struct {
+	EditedAt          *time.Time        `json:"edited_at,omitempty"`
+	DeletedAt         *time.Time        `json:"deleted_at,omitempty"`
 	Reactions         []ReactionSummary `json:"reactions,omitempty"`
 	ReadAt            *time.Time        `json:"read_at,omitempty"`
 	Delivery          *DeliverySummary  `json:"delivery,omitempty"`
@@ -174,6 +178,7 @@ type HistoryChat struct {
 }
 
 type HistoryBatch struct {
+	Changes   []MessageChange
 	Reactions []Reaction
 	Receipts  []Receipt
 	AccountID string
@@ -258,6 +263,7 @@ type LoginStatus struct {
 type EventType string
 
 const (
+	EventMessageChange   EventType = "message_change"
 	EventReaction        EventType = "reaction"
 	EventChatPresence    EventType = "chat_presence"
 	EventReceipt         EventType = "receipt"
@@ -274,6 +280,7 @@ const (
 )
 
 type Event struct {
+	Change        *MessageChange
 	Reaction      *Reaction
 	Presence      *ChatPresence
 	Receipt       *Receipt
@@ -324,6 +331,8 @@ type Connector interface {
 }
 
 type Repository interface {
+	ListMessageRevisions(context.Context, string, *PageCursor, int) ([]MessageRevision, error)
+	SaveMessageChange(context.Context, string, MessageChange) ([]string, error)
 	SaveReaction(ctx context.Context, accountID string, reaction Reaction) ([]string, error)
 	ListMessageReactions(ctx context.Context, messageID, after string, limit int) ([]MessageReaction, error)
 	FindConversationID(ctx context.Context, accountID, providerChatID string) (string, error)

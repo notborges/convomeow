@@ -8,6 +8,9 @@ import (
 )
 
 func (s *Service) RequestHistory(ctx context.Context, conversationID, beforeID string, count int) (string, error) {
+	if err := s.requireCapability("request_history"); err != nil {
+		return "", err
+	}
 	if count < 1 || count > 50 {
 		return "", fmt.Errorf("%w: history count must be between 1 and 50", core.ErrInvalid)
 	}

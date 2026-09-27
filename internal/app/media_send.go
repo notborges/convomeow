@@ -19,6 +19,9 @@ func (s *Service) SendMedia(ctx context.Context, conversationID string, kind cor
 }
 
 func (s *Service) SendMediaReply(ctx context.Context, conversationID string, kind core.MessageKind, uploadID, caption, key, replyID string) (core.Message, error) {
+	if err := s.requireCapability("send_media"); err != nil {
+		return core.Message{}, err
+	}
 	if kind != core.MessageKindImage && kind != core.MessageKindVideo && kind != core.MessageKindAudio &&
 		kind != core.MessageKindDocument && kind != core.MessageKindSticker {
 		return core.Message{}, fmt.Errorf("%w: unsupported media kind", core.ErrInvalid)

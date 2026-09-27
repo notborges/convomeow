@@ -43,6 +43,9 @@ func (s *Service) releaseTemp(size int64) {
 }
 
 func (s *Service) CreateUpload(ctx context.Context, accountID, fileName, declaredType string, data io.Reader) (core.Upload, error) {
+	if err := s.requireCapability("send_media"); err != nil {
+		return core.Upload{}, err
+	}
 	if _, err := s.runtime(accountID); err != nil {
 		return core.Upload{}, err
 	}

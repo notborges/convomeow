@@ -10,6 +10,9 @@ import (
 )
 
 func (s *Service) MessageReceipts(ctx context.Context, id, after string, limit int) ([]core.MessageReceipt, error) {
+	if err := s.requireCapability("message_receipts"); err != nil {
+		return nil, err
+	}
 	message, err := s.repo.GetMessage(ctx, id)
 	if err != nil {
 		return nil, err
@@ -40,6 +43,9 @@ type ReadReceiptResult struct {
 }
 
 func (s *Service) SendReadReceipts(ctx context.Context, conversationID string, ids []string) (ReadReceiptResult, error) {
+	if err := s.requireCapability("read_receipts"); err != nil {
+		return ReadReceiptResult{}, err
+	}
 	result := ReadReceiptResult{ReadIDs: []string{}, Failed: []ReadReceiptFailure{}}
 	if len(ids) == 0 || len(ids) > 100 {
 		return result, fmt.Errorf("%w: provide 1-100 message IDs", core.ErrInvalid)

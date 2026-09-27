@@ -29,7 +29,9 @@ func (s *Store) attachReplies(ctx context.Context, messages []core.Message) erro
 	for i, m := range messages {
 		marks[i], args[i], indexes[m.ID] = "?", m.ID, i
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT r.message_id, COALESCE(original.public_id, ''), r.provider_message_id, r.sender_id, r.kind, r.text
+	rows, err := s.db.QueryContext(ctx, `SELECT r.message_id, COALESCE(original.public_id, ''), r.provider_message_id, r.sender_id, r.kind, r.text,
+ EXISTS(SELECT 1 FROM message_changes c JOIN conversation_aliases ca ON ca.account_id=c.account_id AND ca.jid=c.chat_id
+ WHERE ca.account_id=source.account_id AND ca.conversation_id=source.conversation_id AND c.target_id=r.provider_message_id AND c.kind='revoke')
  FROM message_replies r JOIN messages source ON source.public_id = r.message_id
  LEFT JOIN messages original ON original.account_id = source.account_id AND original.conversation_id = source.conversation_id
  AND original.provider_message_id = r.provider_message_id
@@ -41,7 +43,7 @@ func (s *Store) attachReplies(ctx context.Context, messages []core.Message) erro
 	for rows.Next() {
 		var id string
 		var reply core.Reply
-		if err := rows.Scan(&id, &reply.MessageID, &reply.ProviderMessageID, &reply.SenderID, &reply.Kind, &reply.Text); err != nil {
+		if err := rows.Scan(&id, &reply.MessageID, &reply.ProviderMessageID, &reply.SenderID, &reply.Kind, &reply.Text, &reply.Deleted); err != nil {
 			return err
 		}
 		messages[indexes[id]].Reply = &reply

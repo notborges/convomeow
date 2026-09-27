@@ -51,6 +51,10 @@ func (s *session) importHistory(event *events.HistorySync) {
 				skipped++
 				continue
 			}
+			if change := translateMessageChange(parsed); change != nil {
+				s.emit(core.Event{Type: core.EventHistory, History: &core.HistoryBatch{Changes: []core.MessageChange{*change}}})
+				continue
+			}
 			if reaction := translateReaction(parsed); reaction != nil {
 				s.normalizeReaction(reaction)
 				s.emit(core.Event{Type: core.EventHistory, History: &core.HistoryBatch{Reactions: []core.Reaction{*reaction}}})

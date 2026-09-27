@@ -31,6 +31,9 @@ func (s *Service) saveReaction(ctx context.Context, accountID string, r core.Rea
 }
 
 func (s *Service) SetReaction(ctx context.Context, id, emoji string) (core.Message, error) {
+	if err := s.requireCapability("reactions"); err != nil {
+		return core.Message{}, err
+	}
 	if emoji != "" && !core.ValidReactionEmoji(emoji) {
 		return core.Message{}, fmt.Errorf("%w: provide one emoji", core.ErrInvalid)
 	}
@@ -64,6 +67,9 @@ func (s *Service) SetReaction(ctx context.Context, id, emoji string) (core.Messa
 	target, err = s.repo.GetMessage(ctx, id)
 	if err != nil {
 		return core.Message{}, err
+	}
+	if !s.MessageActions(target).React {
+		return core.Message{}, core.ErrUnsupported
 	}
 	for _, r := range target.Reactions {
 		if r.Own && r.Emoji == emoji {

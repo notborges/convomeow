@@ -103,10 +103,13 @@ func TestReactionCommandsAndIncomingUpdates(t *testing.T) {
 		t.Fatalf("incoming: %+v", got.Reactions)
 	}
 	type page struct {
-		Items []core.MessageReaction `json:"items"`
+		Items []struct {
+			core.MessageReaction
+			AvatarURL string `json:"avatar_url"`
+		} `json:"items"`
 	}
 	details := decode[page](t, request(t, server.Client(), "GET", url+"s", nil, ""), 200)
-	if len(details.Items) != 1 || details.Items[0].IsOwn {
+	if len(details.Items) != 1 || details.Items[0].IsOwn || details.Items[0].AvatarURL != "/api/v1/accounts/"+target.AccountID+"/contacts/123@s.whatsapp.net/avatar" {
 		t.Fatal(details)
 	}
 	connector.emitEvent(core.Event{Type: core.EventDisconnected})

@@ -14,6 +14,9 @@ func (s *Service) replyTarget(ctx context.Context, conversation core.Conversatio
 	if id == "" {
 		return nil, nil
 	}
+	if err := s.requireCapability("replies"); err != nil {
+		return nil, err
+	}
 	target, err := s.repo.GetMessage(ctx, id)
 	if err != nil {
 		return nil, err
@@ -21,6 +24,9 @@ func (s *Service) replyTarget(ctx context.Context, conversation core.Conversatio
 	if target.AccountID != conversation.AccountID || target.ConversationID != conversation.ID ||
 		(target.State != "sent" && target.State != "received") || target.ProviderMessageID == "" {
 		return nil, fmt.Errorf("%w: reply target must be a confirmed message in this conversation", core.ErrInvalid)
+	}
+	if !s.MessageActions(target).Reply {
+		return nil, core.ErrUnsupported
 	}
 	text := []rune(target.Text)
 	if len(text) > 512 {

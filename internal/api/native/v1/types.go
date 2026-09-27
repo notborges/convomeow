@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"slices"
 	"time"
 
 	"github.com/notborges/convomeow/internal/core"
@@ -21,12 +22,19 @@ type accountResponse struct {
 }
 
 func accountFromCore(a core.AccountStatus) accountResponse {
-	return accountResponse{AvatarURL: "/api/v1/accounts/" + a.ID + "/avatar", ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
+	avatar := ""
+	if slices.Contains(a.Capabilities, "read_avatars") {
+		avatar = "/api/v1/accounts/" + a.ID + "/avatar"
+	}
+	return accountResponse{AvatarURL: avatar, ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
-		Capabilities: []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation", "reactions"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+		Capabilities: a.Capabilities, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 type messageResponse struct {
+	Actions           core.MessageActions    `json:"actions"`
+	EditedAt          *time.Time             `json:"edited_at,omitempty"`
+	DeletedAt         *time.Time             `json:"deleted_at,omitempty"`
 	Reactions         []core.ReactionSummary `json:"reactions,omitempty"`
 	ReadAt            *time.Time             `json:"read_at,omitempty"`
 	Delivery          *core.DeliverySummary  `json:"delivery,omitempty"`
@@ -58,7 +66,7 @@ type attachmentResponse struct {
 	Availability    string `json:"availability"`
 }
 
-func messageFromCore(m core.Message) messageResponse {
+func (s *Server) messageFromCore(m core.Message) messageResponse {
 	var content any = map[string]string{}
 	if m.Kind == core.MessageKindText {
 		content = map[string]string{"text": m.Text}
@@ -70,7 +78,7 @@ func messageFromCore(m core.Message) messageResponse {
 		attachments = append(attachments, attachmentResponse{ID: attachment.ID, Kind: string(attachment.Kind),
 			DurationSeconds: attachment.DurationSeconds, Width: attachment.Width, Height: attachment.Height, MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
 	}
-	return messageResponse{Reactions: m.Reactions, ReadAt: m.ReadAt, Delivery: m.Delivery, Reply: m.Reply, ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
+	return messageResponse{Actions: s.service.MessageActions(m), EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, Reactions: m.Reactions, ReadAt: m.ReadAt, Delivery: m.Delivery, Reply: m.Reply, ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
 		Kind: string(m.Kind), Content: content, Attachments: attachments, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
 }
@@ -98,16 +106,16 @@ type conversationResponse struct {
 	LastMessage    *messageResponse `json:"last_message,omitempty"`
 }
 
-func conversationFromCore(c core.Conversation) conversationResponse {
+func (s *Server) conversationFromCore(c core.Conversation) conversationResponse {
 	result := conversationResponse{ID: c.ID, AccountID: c.AccountID, ProviderChatID: c.ProviderChatID,
-		Kind: c.Kind, DisplayName: c.DisplayName, Description: c.Description, AvatarURL: "/api/v1/conversations/" + c.ID + "/avatar",
+		Kind: c.Kind, DisplayName: c.DisplayName, Description: c.Description, AvatarURL: s.avatarURL(c.AccountID, "/api/v1/conversations/"+c.ID+"/avatar"),
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 	if c.Contact != nil {
-		contact := contactFromCore(c.AccountID, *c.Contact)
+		contact := s.contactFromCore(c.AccountID, *c.Contact)
 		result.Contact = &contact
 	}
 	if c.LastMessage != nil {
-		last := messageFromCore(*c.LastMessage)
+		last := s.messageFromCore(*c.LastMessage)
 		result.LastMessage = &last
 	}
 	return result
@@ -137,4 +145,12 @@ func loginAttemptFromCore(status core.LoginStatus) loginAttemptResponse {
 		result.Challenge = &loginChallengeResponse{Type: status.Challenge.Type, Value: status.Challenge.Value, ExpiresAt: status.Challenge.ExpiresAt}
 	}
 	return result
+}
+
+func (s *Server) avatarURL(accountID, path string) string {
+	account, err := s.service.Account(accountID)
+	if err != nil || !slices.Contains(account.Capabilities, "read_avatars") {
+		return ""
+	}
+	return path
 }

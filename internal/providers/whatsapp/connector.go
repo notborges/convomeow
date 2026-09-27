@@ -114,6 +114,12 @@ func (s *session) closeHistoryQueue() {
 }
 
 func (s *session) handleEvent(evt any) {
+	if message, ok := evt.(*events.Message); ok {
+		if change := translateMessageChange(message); change != nil {
+			s.emit(core.Event{Type: core.EventMessageChange, Change: change})
+			return
+		}
+	}
 	if message, ok := evt.(*events.Message); ok && s.receiveReaction(message) {
 		return
 	}
@@ -289,6 +295,10 @@ func translateEvent(emit func(core.Event), evt any) {
 	case *events.TemporaryBan:
 		emit(core.Event{Type: core.EventError, Err: fmt.Errorf("temporary ban: %s", e.String())})
 	case *events.Message:
+		if change := translateMessageChange(e); change != nil {
+			emit(core.Event{Type: core.EventMessageChange, Change: change})
+			return
+		}
 		if reaction := translateReaction(e); reaction != nil {
 			emit(core.Event{Type: core.EventReaction, Reaction: reaction})
 			return

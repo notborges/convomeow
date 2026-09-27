@@ -57,3 +57,5 @@ The connection only sends notifications; commands and file transfers use HTTP. C
 Each connection has a bounded queue. Queue overflow closes the connection with code `1013`; reconnect and refresh after `ready`. Service shutdown closes the stream. Reconnect with bounded backoff and jitter after network failures. Stop reconnecting when the browser session is no longer valid, and close the stream on sign-out.
 
 Reaction changes use `conversations.changed`; read message summaries or the paginated reactions endpoint for current state. Reactions do not create timeline messages or advance their timestamps.
+
+Edits and deletions also use `conversations.changed`. Refresh messages, revision history and conversation previews. Saved content remains available after provider deletion.

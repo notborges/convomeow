@@ -21,9 +21,9 @@ type contactResponse struct {
 	AvatarURL   string `json:"avatar_url"`
 }
 
-func contactFromCore(accountID string, contact core.Contact) contactResponse {
+func (s *Server) contactFromCore(accountID string, contact core.Contact) contactResponse {
 	return contactResponse{ProviderID: contact.ProviderID, Name: contact.Name, Phone: contact.Phone, MaskedPhone: contact.MaskedPhone,
-		AvatarURL: "/api/v1/accounts/" + accountID + "/contacts/" + url.PathEscape(contact.ProviderID) + "/avatar"}
+		AvatarURL: s.avatarURL(accountID, "/api/v1/accounts/"+accountID+"/contacts/"+url.PathEscape(contact.ProviderID)+"/avatar")}
 }
 
 func (s *Server) listContacts(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +71,7 @@ func (s *Server) listContacts(w http.ResponseWriter, r *http.Request) {
 	end := min(start+limit, len(contacts))
 	items := make([]contactResponse, 0, end-start)
 	for _, contact := range contacts[start:end] {
-		items = append(items, contactFromCore(accountID, contact))
+		items = append(items, s.contactFromCore(accountID, contact))
 	}
 	next := ""
 	if end < len(contacts) {
@@ -90,7 +90,7 @@ func (s *Server) getContact(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, contactFromCore(r.PathValue("id"), contact))
+	writeJSON(w, http.StatusOK, s.contactFromCore(r.PathValue("id"), contact))
 }
 
 func (s *Server) getContactAvatar(w http.ResponseWriter, r *http.Request) {

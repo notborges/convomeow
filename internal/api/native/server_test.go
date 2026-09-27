@@ -21,37 +21,41 @@ import (
 	"github.com/notborges/convomeow/internal/api/native"
 	"github.com/notborges/convomeow/internal/app"
 	"github.com/notborges/convomeow/internal/core"
+	"github.com/notborges/convomeow/internal/providers/whatsapp"
 	"github.com/notborges/convomeow/internal/store/sqlite"
 )
 
 type fakeConnector struct {
-	reactionCalls    chan core.Reaction
-	failReaction     atomic.Bool
-	presenceCalls    chan core.ChatActivity
-	onlineCalls      chan bool
-	readCalls        chan []string
-	failReadSender   string
-	preparedMessages chan core.PreparedMessage
-	historyRequests  chan core.Message
-	nextID           atomic.Int64
-	sends            atomic.Int64
-	failSend         atomic.Bool
-	mediaPayload     []byte
-	mediaGate        chan struct{}
-	mediaDownloads   atomic.Int64
-	mediaUploads     atomic.Int64
-	mediaSends       atomic.Int64
-	failMediaUpload  atomic.Bool
-	failMediaSend    atomic.Bool
-	contacts         map[string]core.Contact
-	avatar           core.Avatar
-	avatarMu         sync.RWMutex
-	avatarGate       <-chan struct{}
-	avatarStarted    chan<- struct{}
-	avatarFetches    atomic.Int64
-	offline          bool
-	eventMu          sync.Mutex
-	event            func(core.Event)
+	capabilitiesOverride []string
+	changeCalls          chan core.MessageChange
+	failChange           atomic.Bool
+	reactionCalls        chan core.Reaction
+	failReaction         atomic.Bool
+	presenceCalls        chan core.ChatActivity
+	onlineCalls          chan bool
+	readCalls            chan []string
+	failReadSender       string
+	preparedMessages     chan core.PreparedMessage
+	historyRequests      chan core.Message
+	nextID               atomic.Int64
+	sends                atomic.Int64
+	failSend             atomic.Bool
+	mediaPayload         []byte
+	mediaGate            chan struct{}
+	mediaDownloads       atomic.Int64
+	mediaUploads         atomic.Int64
+	mediaSends           atomic.Int64
+	failMediaUpload      atomic.Bool
+	failMediaSend        atomic.Bool
+	contacts             map[string]core.Contact
+	avatar               core.Avatar
+	avatarMu             sync.RWMutex
+	avatarGate           <-chan struct{}
+	avatarStarted        chan<- struct{}
+	avatarFetches        atomic.Int64
+	offline              bool
+	eventMu              sync.Mutex
+	event                func(core.Event)
 }
 
 func (c *fakeConnector) ResolveTarget(target core.ConversationTarget) (string, error) {
@@ -495,4 +499,14 @@ func (s *fakeSession) SendChatPresence(_ context.Context, _ string, activity cor
 		s.connector.presenceCalls <- activity
 	}
 	return nil
+}
+
+func (c *fakeConnector) Capabilities() []string {
+	if c.capabilitiesOverride != nil {
+		return c.capabilitiesOverride
+	}
+	return (&whatsapp.Connector{}).Capabilities()
+}
+func (*fakeConnector) MessageActions(m core.Message, at time.Time) core.MessageActions {
+	return (&whatsapp.Connector{}).MessageActions(m, at)
 }

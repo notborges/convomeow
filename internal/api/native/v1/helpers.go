@@ -111,6 +111,10 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, code, deta
 
 func respondError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, core.ErrUnsupported):
+		writeProblem(w, r, http.StatusUnprocessableEntity, "unsupported_operation", "This connection does not support this action.")
+	case errors.Is(err, core.ErrMessageChangeUnconfirmed):
+		writeProblem(w, r, http.StatusBadGateway, "message_change_unconfirmed", "The message change could not be confirmed. Refresh before retrying.")
 	case errors.Is(err, core.ErrReactionUnconfirmed):
 		writeProblem(w, r, http.StatusBadGateway, "reaction_unconfirmed", "Reaction could not be confirmed. Refresh before trying again.")
 	case errors.Is(err, core.ErrNotFound):

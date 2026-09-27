@@ -70,6 +70,11 @@ func (s *Store) ImportHistory(ctx context.Context, batch core.HistoryBatch) erro
 	} else if len(batch.Messages) > 0 {
 		return core.ErrInvalid
 	}
+	for _, change := range batch.Changes {
+		if err := saveMessageChangeTx(ctx, tx, batch.AccountID, change); err != nil {
+			return err
+		}
+	}
 	for _, reaction := range batch.Reactions {
 		if _, err := saveReactionTx(ctx, tx, batch.AccountID, reaction); err != nil {
 			return err

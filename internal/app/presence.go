@@ -43,6 +43,9 @@ func (s *Service) receivePresence(accountID string, presence *core.ChatPresence)
 
 // Each opted-in event stream owns one viewer; only the last release marks the account offline.
 func (s *Service) WatchPresence(accountID string) (func(), error) {
+	if err := s.requireCapability("typing"); err != nil {
+		return nil, err
+	}
 	rt, err := s.runtime(accountID)
 	if err != nil {
 		return nil, err
@@ -90,6 +93,9 @@ func (s *Service) setOnlineLocked(rt *runtimeAccount, online bool) {
 }
 
 func (s *Service) SendChatPresence(ctx context.Context, conversationID, clientID string, activity core.ChatActivity) error {
+	if err := s.requireCapability("typing"); err != nil {
+		return err
+	}
 	if len(clientID) == 0 || len(clientID) > 128 {
 		return fmt.Errorf("%w: client_id must contain 1-128 characters", core.ErrInvalid)
 	}

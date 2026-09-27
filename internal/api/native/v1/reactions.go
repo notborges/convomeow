@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -32,7 +33,7 @@ func (s *Server) setReaction(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, messageFromCore(message))
+	writeJSON(w, http.StatusOK, s.messageFromCore(message))
 }
 
 func (s *Server) listReactions(w http.ResponseWriter, r *http.Request) {
@@ -61,5 +62,22 @@ func (s *Server) listReactions(w http.ResponseWriter, r *http.Request) {
 		items = items[:limit]
 		next = base64.RawURLEncoding.EncodeToString([]byte(items[len(items)-1].ParticipantID))
 	}
-	writeJSON(w, 200, pageResponse[core.MessageReaction]{Items: items, NextCursor: next})
+	message, err := s.service.Message(r.Context(), r.PathValue("id"))
+	if err != nil {
+		respondError(w, r, err)
+		return
+	}
+	type reactionResponse struct {
+		core.MessageReaction
+		AvatarURL string `json:"avatar_url,omitempty"`
+	}
+	responses := make([]reactionResponse, 0, len(items))
+	for _, item := range items {
+		path := "/api/v1/accounts/" + message.AccountID + "/contacts/" + url.PathEscape(item.ParticipantID) + "/avatar"
+		if item.IsOwn {
+			path = "/api/v1/accounts/" + message.AccountID + "/avatar"
+		}
+		responses = append(responses, reactionResponse{MessageReaction: item, AvatarURL: s.avatarURL(message.AccountID, path)})
+	}
+	writeJSON(w, 200, pageResponse[reactionResponse]{Items: responses, NextCursor: next})
 }
