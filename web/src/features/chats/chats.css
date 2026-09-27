@@ -214,15 +214,27 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  overflow-anchor: none;
 }
-.message-flow {
-  display: flex;
-  min-height: 100%;
+.message-row {
+  display: flow-root;
   max-width: 860px;
-  flex-direction: column;
-  justify-content: flex-end;
   margin-inline: auto;
-  padding: var(--space-6) clamp(20px, 3vw, 40px);
+  padding-inline: clamp(20px, 3vw, 40px);
+  padding-bottom: var(--space-1);
+}
+.history-edge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+.history-edge > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 .day-label {
   display: flex;
@@ -475,8 +487,8 @@
   .thread-head__context {
     display: none;
   }
-  .message-flow {
-    padding: var(--space-4);
+  .message-row {
+    padding-inline: var(--space-4);
   }
   .message__bubble {
     max-width: 88%;
@@ -546,6 +558,12 @@
   position: relative;
   flex: 1;
   min-height: 0;
+}
+.thread-body > :is(.empty-state, .loading) {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  align-self: stretch;
 }
 .thread-messages {
   width: 100%;

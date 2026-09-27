@@ -43,6 +43,8 @@ Connect to `/api/v1/events` for WebSocket notifications and fetch changed resour
 
 ## History and downloads
 
+Message pages are returned newest first. Follow `next_cursor` with `cursor` for older messages and `previous_cursor` with `after_cursor` for newer messages. Both directions retain a return cursor so clients can discard distant pages and load them again. The web client keeps ten pages of 50 messages per window, renders only nearby rows, and loads more saved history as the user scrolls. Scrolling does not request additional history from the phone.
+
 ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. To request earlier messages, post `{"before_message_id":"<saved-message-id>","count":50}` to `/api/v1/conversations/{id}/history-requests`. The server merges returned history into saved messages. A `202` response confirms the request was sent, not that the phone returned history. It attempts to download new images, videos, audio, documents, and stickers in the background. The web client loads images and stickers from imported history as they enter view. Other imported files download on request. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
 
 ## Reactions

@@ -92,6 +92,7 @@
     "phoneExample": "+5511999999999"
   },
   "thread": {
+    "historyError": "Não foi possível carregar mais mensagens.",
     "today": "Hoje",
     "yesterday": "Ontem",
     "conversation": "Conversa",

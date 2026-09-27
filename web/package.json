@@ -23,7 +23,8 @@
     "react": "latest",
     "react-dom": "latest",
     "react-i18next": "latest",
-    "react-router": "latest"
+    "react-router": "latest",
+    "react-virtuoso": "latest"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",

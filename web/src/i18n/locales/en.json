@@ -92,6 +92,7 @@
     "phoneExample": "+15551234567"
   },
   "thread": {
+    "historyError": "Could not load more messages.",
     "today": "Today",
     "yesterday": "Yesterday",
     "conversation": "Conversation",

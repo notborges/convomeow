@@ -127,6 +127,7 @@ export const api = {
     conversationID: string,
     cursor?: string,
     position?: { around?: string; after?: string },
+    signal?: AbortSignal,
   ) =>
     request<Page<Message>>(
       pageURL(
@@ -138,6 +139,7 @@ export const api = {
           after_cursor: position?.after,
         },
       ),
+      { signal },
     ),
   reactions: (id: string, cursor?: string) =>
     request<Page<MessageReaction>>(

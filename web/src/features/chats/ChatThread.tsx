@@ -1,45 +1,23 @@
 import {
-  ArrowDown01Icon,
   ArrowLeft01Icon,
-  Chat01Icon,
   InformationCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import { keys } from "../../api/queries";
 import type { Account, Message } from "../../api/types";
 import { LiveAvatar } from "../../app/LiveAvatar";
-import i18n from "../../i18n";
-import { formatDate } from "../../i18n/format";
-import { Button, IconButton } from "../../ui/Button";
-import { EmptyState } from "../../ui/EmptyState";
-import { Loading } from "../../ui/Loading";
+import { IconButton } from "../../ui/Button";
 import { motionTiming } from "../../ui/motion";
 import { ProviderBadge } from "../../ui/ProviderBadge";
 import { ChatPresenceIndicator } from "../presence/PresenceIndicator";
 import { Composer } from "./Composer";
 import { ConversationDetails } from "./ConversationDetails";
-import { MessageBubble } from "./MessageBubble";
-
-function messageDay(value: string): string {
-  const date = new Date(value);
-  const today = new Date();
-  if (date.toDateString() === today.toDateString())
-    return i18n.t(($) => $.thread.today);
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString())
-    return i18n.t(($) => $.thread.yesterday);
-  return formatDate(value, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
+import { MessageTimeline, type MessageTimelineHandle } from "./MessageTimeline";
 
 export function ChatThread({
   account,
@@ -53,87 +31,13 @@ export function ChatThread({
   const { t } = useTranslation();
 
   const [reply, setReply] = useState<Message>();
-  const [anchor, setAnchor] = useState("");
-  const [jumpTarget, setJumpTarget] = useState("");
-  const [highlight, setHighlight] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const timeline = useRef<MessageTimelineHandle>(null);
   const conversation = useQuery({
     queryKey: keys.conversation(conversationID),
     meta: { accountID: account.id },
     queryFn: () => api.conversation(conversationID),
   });
-  const messages = useInfiniteQuery({
-    queryKey: [...keys.messages(conversationID), { around: anchor }],
-    meta: { accountID: account.id },
-    queryFn: ({ pageParam }) =>
-      api.messages(conversationID, pageParam.cursor, pageParam),
-    initialPageParam: { around: anchor } as {
-      around?: string;
-      cursor?: string;
-      after?: string;
-    },
-    getNextPageParam: (page) =>
-      page.next_cursor ? { cursor: page.next_cursor } : undefined,
-    getPreviousPageParam: (page) =>
-      page.previous_cursor ? { after: page.previous_cursor } : undefined,
-  });
-  const scroll = useRef<HTMLDivElement>(null);
-  const nearBottom = useRef(true);
-  const lastContentHeight = useRef(0);
-  const priorHeight = useRef<number | undefined>(undefined);
-  const items = messages.data?.pages.flatMap((page) => page.items) ?? [];
-  const ordered = [...items].reverse();
-  const newestID = items[0]?.id;
-
-  useEffect(() => {
-    if (!anchor && nearBottom.current && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
-  }, [newestID, anchor]);
-
-  useLayoutEffect(() => {
-    if (priorHeight.current !== undefined && scroll.current) {
-      scroll.current.scrollTop +=
-        scroll.current.scrollHeight - priorHeight.current;
-      priorHeight.current = undefined;
-    }
-  }, [messages.data?.pages.length]);
-
-  useLayoutEffect(() => {
-    const area = scroll.current;
-    const flow = area?.querySelector(".message-flow");
-    if (!area || !flow) return;
-    const observer = new ResizeObserver(() => {
-      if (nearBottom.current) area.scrollTop = area.scrollHeight;
-      lastContentHeight.current = area.scrollHeight;
-    });
-    observer.observe(flow);
-    return () => observer.disconnect();
-  }, []);
-
-  function jumpToMessage(id: string) {
-    nearBottom.current = false;
-    setJumpTarget(id);
-    if (!items.some((message) => message.id === id)) setAnchor(id);
-  }
-
-  useLayoutEffect(() => {
-    if (!jumpTarget) return;
-    const target = document.getElementById(`message-${jumpTarget}`);
-    if (!target) return;
-    target.scrollIntoView({ block: "center" });
-    target.focus({ preventScroll: true });
-    setHighlight(jumpTarget);
-    setJumpTarget("");
-    setAwayFromBottom(true);
-  }, [jumpTarget, items]);
-
-  useEffect(() => {
-    if (!highlight) return;
-    const timer = window.setTimeout(() => setHighlight(""), 1800);
-    return () => window.clearTimeout(timer);
-  }, [highlight]);
-
   function replySender(message: { sender_id?: string; direction?: string }) {
     if (
       message.direction === "outbound" ||
@@ -145,24 +49,6 @@ export function ChatThread({
     return message.sender_id?.split("@")[0];
   }
 
-  function loadOlder() {
-    if (scroll.current) priorHeight.current = scroll.current.scrollHeight;
-    messages.fetchNextPage();
-  }
-
-  function onScroll() {
-    const area = scroll.current;
-    if (area) {
-      if (nearBottom.current && area.scrollHeight !== lastContentHeight.current)
-        area.scrollTop = area.scrollHeight;
-      lastContentHeight.current = area.scrollHeight;
-      nearBottom.current =
-        area.scrollHeight - area.scrollTop - area.clientHeight < 100;
-      setAwayFromBottom(!nearBottom.current);
-    }
-  }
-
-  let lastDay = "";
   return (
     <motion.main
       initial={{ opacity: 0 }}
@@ -225,133 +111,20 @@ export function ChatThread({
           </IconButton>
         </div>
       </header>
-      <div className="thread-body">
-        <div className="thread-messages" ref={scroll} onScroll={onScroll}>
-          <div className="message-flow">
-            {anchor && (
-              <Button
-                className="load-more"
-                onClick={() => {
-                  setAnchor("");
-                  setJumpTarget("");
-                  nearBottom.current = true;
-                }}
-              >
-                {t(($) => $.thread.latest)}
-              </Button>
-            )}
-            {messages.hasNextPage && (
-              <Button
-                className="load-more load-more--messages"
-                type="button"
-                onClick={loadOlder}
-                disabled={messages.isFetchingNextPage}
-              >
-                {messages.isFetchingNextPage
-                  ? t(($) => $.chats.loadingMore)
-                  : t(($) => $.thread.older)}
-              </Button>
-            )}
-            {messages.isPending ? (
-              <Loading label={t(($) => $.thread.loading)} />
-            ) : messages.isError ? (
-              <EmptyState title={t(($) => $.thread.error)}>
-                <Button variant="text" onClick={() => messages.refetch()}>
-                  {t(($) => $.common.retry)}
-                </Button>
-              </EmptyState>
-            ) : ordered.length === 0 ? (
-              <EmptyState
-                icon={<HugeiconsIcon icon={Chat01Icon} size={28} />}
-                title={t(($) => $.thread.hello)}
-                description={t(($) => $.thread.first)}
-              />
-            ) : (
-              ordered.map((message, index) => {
-                const previous = ordered[index - 1];
-                const grouped =
-                  !!previous &&
-                  previous.direction === message.direction &&
-                  previous.sender_id === message.sender_id &&
-                  new Date(message.occurred_at).getTime() -
-                    new Date(previous.occurred_at).getTime() <
-                    5 * 60 * 1000;
-                const day = new Date(message.occurred_at).toDateString();
-                const showDay = day !== lastDay;
-                lastDay = day;
-                return (
-                  <div
-                    key={message.id}
-                    className={
-                      highlight === message.id ? "reply-target" : undefined
-                    }
-                  >
-                    {showDay && (
-                      <div className="day-label">
-                        {messageDay(message.occurred_at)}
-                      </div>
-                    )}
-                    <MessageBubble
-                      message={message}
-                      onReply={(message) => setReply({ ...message })}
-                      onJump={jumpToMessage}
-                      replySender={
-                        message.reply ? replySender(message.reply) : undefined
-                      }
-                      grouped={grouped && !showDay}
-                      showSender={conversation.data?.kind === "group"}
-                    />
-                  </div>
-                );
-              })
-            )}
-            {messages.hasPreviousPage && (
-              <Button
-                className="load-more"
-                disabled={messages.isFetchingPreviousPage}
-                onClick={() => messages.fetchPreviousPage()}
-              >
-                {t(($) => $.reply.newer)}
-              </Button>
-            )}
-          </div>
-        </div>
-        <AnimatePresence>
-          {awayFromBottom && !anchor && (
-            <motion.div
-              className="jump-latest"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              transition={motionTiming.feedback}
-            >
-              <Button
-                onClick={() => {
-                  setAnchor("");
-                  setJumpTarget("");
-                  if (scroll.current)
-                    scroll.current.scrollTop = scroll.current.scrollHeight;
-                  nearBottom.current = true;
-                  setAwayFromBottom(false);
-                }}
-              >
-                <HugeiconsIcon icon={ArrowDown01Icon} size={18} />
-                {t(($) => $.thread.latest)}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <MessageTimeline
+        ref={timeline}
+        accountID={account.id}
+        conversationID={conversationID}
+        showSender={conversation.data?.kind === "group"}
+        replySender={replySender}
+        onReply={(message) => setReply({ ...message })}
+      />
       <Composer
         accountID={account.id}
         conversationID={conversationID}
         connected={account.state === "connected"}
         capabilities={account.capabilities}
-        onSent={() => {
-          setAnchor("");
-          setJumpTarget("");
-          nearBottom.current = true;
-        }}
+        onSent={() => timeline.current?.latest()}
         reply={reply}
         replySender={reply ? replySender(reply) : undefined}
         onClearReply={(id) =>
