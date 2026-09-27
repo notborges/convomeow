@@ -2,7 +2,7 @@
 
 # ConvoMeow
 
-A self-hosted messaging app with a web client, CLI, and HTTP API. Connect multiple WhatsApp accounts through [whatsmeow](https://github.com/tulir/whatsmeow) and manage them from one server.
+A self-hosted client and API for WhatsApp, powered by [whatsmeow](https://github.com/tulir/whatsmeow). Manage multiple accounts through the web interface, CLI, or HTTP API.
 
 ![ConvoMeow web client with fictional conversations](docs/images/web-client.png)
 
