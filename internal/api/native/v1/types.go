@@ -23,25 +23,26 @@ type accountResponse struct {
 func accountFromCore(a core.AccountStatus) accountResponse {
 	return accountResponse{AvatarURL: "/api/v1/accounts/" + a.ID + "/avatar", ID: a.ID, Provider: a.Provider, ConnectionKind: a.ConnectionKind, Label: a.Label,
 		ProviderIdentity: a.ProviderIdentity, State: a.State, LastError: a.LastError,
-		Capabilities: []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
+		Capabilities: []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation", "reactions"}, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt}
 }
 
 type messageResponse struct {
-	ReadAt            *time.Time            `json:"read_at,omitempty"`
-	Delivery          *core.DeliverySummary `json:"delivery,omitempty"`
-	Reply             *core.Reply           `json:"reply,omitempty"`
-	ID                string                `json:"id"`
-	AccountID         string                `json:"account_id"`
-	ConversationID    string                `json:"conversation_id"`
-	ProviderMessageID string                `json:"provider_message_id,omitempty"`
-	Direction         string                `json:"direction"`
-	State             string                `json:"state"`
-	SenderID          string                `json:"sender_id,omitempty"`
-	Kind              string                `json:"kind"`
-	Content           any                   `json:"content"`
-	Attachments       []attachmentResponse  `json:"attachments,omitempty"`
-	OccurredAt        time.Time             `json:"occurred_at"`
-	IngestedAt        time.Time             `json:"ingested_at"`
+	Reactions         []core.ReactionSummary `json:"reactions,omitempty"`
+	ReadAt            *time.Time             `json:"read_at,omitempty"`
+	Delivery          *core.DeliverySummary  `json:"delivery,omitempty"`
+	Reply             *core.Reply            `json:"reply,omitempty"`
+	ID                string                 `json:"id"`
+	AccountID         string                 `json:"account_id"`
+	ConversationID    string                 `json:"conversation_id"`
+	ProviderMessageID string                 `json:"provider_message_id,omitempty"`
+	Direction         string                 `json:"direction"`
+	State             string                 `json:"state"`
+	SenderID          string                 `json:"sender_id,omitempty"`
+	Kind              string                 `json:"kind"`
+	Content           any                    `json:"content"`
+	Attachments       []attachmentResponse   `json:"attachments,omitempty"`
+	OccurredAt        time.Time              `json:"occurred_at"`
+	IngestedAt        time.Time              `json:"ingested_at"`
 }
 
 type attachmentResponse struct {
@@ -69,7 +70,7 @@ func messageFromCore(m core.Message) messageResponse {
 		attachments = append(attachments, attachmentResponse{ID: attachment.ID, Kind: string(attachment.Kind),
 			DurationSeconds: attachment.DurationSeconds, Width: attachment.Width, Height: attachment.Height, MIMEType: attachment.MIMEType, FileName: attachment.FileName, Size: attachment.Size, Availability: attachment.Availability})
 	}
-	return messageResponse{ReadAt: m.ReadAt, Delivery: m.Delivery, Reply: m.Reply, ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
+	return messageResponse{Reactions: m.Reactions, ReadAt: m.ReadAt, Delivery: m.Delivery, Reply: m.Reply, ID: m.ID, AccountID: m.AccountID, ConversationID: m.ConversationID,
 		ProviderMessageID: m.ProviderMessageID, Direction: m.Direction, State: m.State, SenderID: m.SenderID,
 		Kind: string(m.Kind), Content: content, Attachments: attachments, OccurredAt: m.OccurredAt, IngestedAt: m.IngestedAt}
 }

@@ -21,6 +21,8 @@ func New(service *app.Service, token string, browserAuth func(*http.Request) boo
 	mux := http.NewServeMux()
 	register(mux, "/api/v1/conversations/{id}/presence", map[string]http.HandlerFunc{"POST": s.sendPresence})
 	mux.HandleFunc("GET /api/v1/events", s.events)
+	register(mux, "/api/v1/messages/{id}/reaction", map[string]http.HandlerFunc{"PUT": s.setReaction, "DELETE": s.setReaction})
+	register(mux, "/api/v1/messages/{id}/reactions", map[string]http.HandlerFunc{"GET": s.listReactions})
 	register(mux, "/api/v1/messages/{id}/receipts", map[string]http.HandlerFunc{"GET": s.listReceipts})
 	register(mux, "/api/v1/conversations/{id}/read-receipts", map[string]http.HandlerFunc{"POST": s.sendReadReceipts})
 	register(mux, "/api/v1/conversations/{id}/history-requests", map[string]http.HandlerFunc{"POST": s.requestHistory})

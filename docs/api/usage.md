@@ -44,3 +44,13 @@ Connect to `/api/v1/events` for WebSocket notifications and fetch changed resour
 ## History and downloads
 
 ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. To request earlier messages, post `{"before_message_id":"<saved-message-id>","count":50}` to `/api/v1/conversations/{id}/history-requests`. The server merges returned history into saved messages. A `202` response confirms the request was sent, not that the phone returned history. It attempts to download new images, videos, audio, documents, and stickers in the background. The web client loads images and stickers from imported history as they enter view. Other imported files download on request. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
+
+## Reactions
+
+Use `PUT /api/v1/messages/{id}/reaction` with `{"emoji":"👍"}` to set or replace the connected account's reaction. Use `DELETE` on the same route to remove it. Both return the updated message after provider acknowledgment. The target must be a confirmed saved message in a direct or group conversation.
+
+Message responses include `reactions` summaries with `emoji`, `count`, and `own`. `GET /api/v1/messages/{id}/reactions` lists participants with cursor pagination; `self` identifies the connected account across its devices. These reads do not send reactions or mark messages read.
+
+Commands set the requested state and do not toggle it. There is no automatic retry or durable reaction command queue. A `502 reaction_unconfirmed` response can follow a provider timeout or a local recording failure after acknowledgment. Refresh before retrying; a new request sets the desired state again.
+
+Live events and imported history update the same stored reaction state. Removal timestamps prevent older history from restoring removed reactions. `conversations.changed` notifications invalidate message and participant queries. Existing local messages acquire old reactions only when the provider supplies those reactions again; adding this feature does not request a resync.

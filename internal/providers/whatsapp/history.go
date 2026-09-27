@@ -51,6 +51,11 @@ func (s *session) importHistory(event *events.HistorySync) {
 				skipped++
 				continue
 			}
+			if reaction := translateReaction(parsed); reaction != nil {
+				s.normalizeReaction(reaction)
+				s.emit(core.Event{Type: core.EventHistory, History: &core.HistoryBatch{Reactions: []core.Reaction{*reaction}}})
+				continue
+			}
 			message := translateMessage(parsed)
 			if message == nil || message.OccurredAt.Before(time.Unix(946684800, 0)) {
 				skipped++
@@ -58,6 +63,10 @@ func (s *session) importHistory(event *events.HistorySync) {
 			}
 			message.ProviderOrder = item.MsgOrderID
 			batch.Messages = append(batch.Messages, *message)
+			for _, reaction := range historyReactions(item.GetMessage(), *message) {
+				s.normalizeReaction(&reaction)
+				batch.Reactions = append(batch.Reactions, reaction)
+			}
 			batch.Receipts = append(batch.Receipts, historyReceipts(item.GetMessage(), *message, chat.Kind == "group")...)
 			messageCount++
 			if len(batch.Messages) == historyBatchSize {

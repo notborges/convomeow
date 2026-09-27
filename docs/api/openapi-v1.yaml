@@ -755,6 +755,121 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           description: Account is not connected.
+  /api/v1/messages/{id}/reaction:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    put:
+      operationId: setMessageReaction
+      summary: Set or replace the connected account reaction
+      description: >-
+        Uses a confirmed saved message in a direct or group conversation.
+        This changes the real provider account. Commands set the desired state;
+        they do not toggle it. There is no automatic retry or persistent command queue.
+        A reaction_unconfirmed error may mean the provider accepted the change;
+        refresh the message before explicitly retrying.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+                  description: One supported Unicode emoji, including skin tones and joined sequences. Maximum 128 UTF-8 bytes. Use DELETE to remove.
+                  example: "👍"
+      responses:
+        '200':
+          description: Updated message after provider acknowledgment, or unchanged message when the requested emoji is already saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          description: Reaction outcome could not be confirmed. Code reaction_unconfirmed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+    delete:
+      operationId: removeMessageReaction
+      summary: Remove the connected account reaction
+      description: >-
+        Uses a confirmed saved message in a direct or group conversation.
+        This changes the real provider account. Commands set the desired state;
+        they do not toggle it. There is no automatic retry or persistent command queue.
+        A reaction_unconfirmed error may mean the provider accepted the change;
+        refresh the message before explicitly retrying.
+      responses:
+        '200':
+          description: Updated message after provider acknowledgment, or unchanged message when the requested emoji is already saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '502':
+          description: Reaction outcome could not be confirmed. Code reaction_unconfirmed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/v1/messages/{id}/reactions:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      operationId: listMessageReactions
+      summary: List current reaction participants
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Current participants ordered by opaque participant ID. Removed reactions are omitted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageReaction'
+                  next_cursor: {type: string}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/messages/{id}/receipts:
     parameters:
       - name: id
@@ -1272,10 +1387,35 @@ components:
         delivered_count: {type: integer, minimum: 0}
         read_count: {type: integer, minimum: 0}
         group: {type: boolean}
+    ReactionSummary:
+      type: object
+      required: [emoji, count, own]
+      properties:
+        emoji: {type: string}
+        count: {type: integer, minimum: 1}
+        own:
+          type: boolean
+          description: The connected account currently uses this emoji.
+    MessageReaction:
+      type: object
+      required: [participant_id, is_own, emoji, at]
+      properties:
+        participant_id:
+          type: string
+          description: Opaque participant identity. The connected account uses the stable value self across linked devices.
+        display_name: {type: string}
+        is_own: {type: boolean}
+        emoji: {type: string}
+        at: {type: string, format: date-time}
     Message:
       type: object
       required: [id, account_id, conversation_id, direction, state, kind, content, occurred_at, ingested_at]
       properties:
+        reactions:
+          type: array
+          description: Current observed reaction counts. Omitted when empty. History coverage depends on provider data.
+          items:
+            $ref: '#/components/schemas/ReactionSummary'
         delivery:
           $ref: '#/components/schemas/DeliverySummary'
         read_at:

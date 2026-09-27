@@ -130,6 +130,9 @@ func addChatLinkTx(ctx context.Context, tx *sql.Tx, accountID string, link core.
 			return normalizeError(err)
 		}
 	}
+	if err := mergeReactionParticipantsTx(ctx, tx, accountID, link.First); err != nil {
+		return err
+	}
 	if err := mergeReceiptParticipantsTx(ctx, tx, accountID, link.First); err != nil {
 		return err
 	}

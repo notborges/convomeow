@@ -154,5 +154,8 @@ FROM attachments WHERE message_id IN (`+strings.Join(marks, ",")+`) ORDER BY mes
 	if err := s.attachDelivery(ctx, messages); err != nil {
 		return err
 	}
+	if err := s.attachReactions(ctx, messages); err != nil {
+		return err
+	}
 	return s.attachReadReceipts(ctx, messages)
 }

@@ -111,6 +111,8 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, code, deta
 
 func respondError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, core.ErrReactionUnconfirmed):
+		writeProblem(w, r, http.StatusBadGateway, "reaction_unconfirmed", "Reaction could not be confirmed. Refresh before trying again.")
 	case errors.Is(err, core.ErrNotFound):
 		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found.")
 	case errors.Is(err, core.ErrIdempotency):

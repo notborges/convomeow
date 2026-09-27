@@ -88,25 +88,26 @@ type DeliverySummary struct {
 }
 
 type Message struct {
-	ReadAt            *time.Time       `json:"read_at,omitempty"`
-	Delivery          *DeliverySummary `json:"delivery,omitempty"`
-	Reply             *Reply           `json:"reply,omitempty"`
-	ProviderOrder     *uint64          `json:"-"`
-	LocalOrder        int64            `json:"-"`
-	ID                string           `json:"id"`
-	AccountID         string           `json:"account_id"`
-	ConversationID    string           `json:"conversation_id"`
-	ChatID            string           `json:"-"`
-	ProviderMessageID string           `json:"provider_message_id"`
-	Direction         string           `json:"direction"`
-	State             string           `json:"state"`
-	SenderID          string           `json:"sender_id,omitempty"`
-	Kind              MessageKind      `json:"kind"`
-	Text              string           `json:"text,omitempty"`
-	Content           json.RawMessage  `json:"content,omitempty"`
-	Attachments       []Attachment     `json:"attachments,omitempty"`
-	OccurredAt        time.Time        `json:"occurred_at"`
-	IngestedAt        time.Time        `json:"ingested_at"`
+	Reactions         []ReactionSummary `json:"reactions,omitempty"`
+	ReadAt            *time.Time        `json:"read_at,omitempty"`
+	Delivery          *DeliverySummary  `json:"delivery,omitempty"`
+	Reply             *Reply            `json:"reply,omitempty"`
+	ProviderOrder     *uint64           `json:"-"`
+	LocalOrder        int64             `json:"-"`
+	ID                string            `json:"id"`
+	AccountID         string            `json:"account_id"`
+	ConversationID    string            `json:"conversation_id"`
+	ChatID            string            `json:"-"`
+	ProviderMessageID string            `json:"provider_message_id"`
+	Direction         string            `json:"direction"`
+	State             string            `json:"state"`
+	SenderID          string            `json:"sender_id,omitempty"`
+	Kind              MessageKind       `json:"kind"`
+	Text              string            `json:"text,omitempty"`
+	Content           json.RawMessage   `json:"content,omitempty"`
+	Attachments       []Attachment      `json:"attachments,omitempty"`
+	OccurredAt        time.Time         `json:"occurred_at"`
+	IngestedAt        time.Time         `json:"ingested_at"`
 }
 
 type Attachment struct {
@@ -173,6 +174,7 @@ type HistoryChat struct {
 }
 
 type HistoryBatch struct {
+	Reactions []Reaction
 	Receipts  []Receipt
 	AccountID string
 	Chat      *HistoryChat
@@ -256,6 +258,7 @@ type LoginStatus struct {
 type EventType string
 
 const (
+	EventReaction        EventType = "reaction"
 	EventChatPresence    EventType = "chat_presence"
 	EventReceipt         EventType = "receipt"
 	EventContactsChanged EventType = "contacts_changed"
@@ -271,6 +274,7 @@ const (
 )
 
 type Event struct {
+	Reaction      *Reaction
 	Presence      *ChatPresence
 	Receipt       *Receipt
 	Type          EventType
@@ -320,6 +324,8 @@ type Connector interface {
 }
 
 type Repository interface {
+	SaveReaction(ctx context.Context, accountID string, reaction Reaction) ([]string, error)
+	ListMessageReactions(ctx context.Context, messageID, after string, limit int) ([]MessageReaction, error)
 	FindConversationID(ctx context.Context, accountID, providerChatID string) (string, error)
 	RecordReadReceipts(ctx context.Context, ids []string, at time.Time) error
 	SaveReceipt(ctx context.Context, accountID string, receipt Receipt) ([]string, error)

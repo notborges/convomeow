@@ -114,6 +114,9 @@ func (s *session) closeHistoryQueue() {
 }
 
 func (s *session) handleEvent(evt any) {
+	if message, ok := evt.(*events.Message); ok && s.receiveReaction(message) {
+		return
+	}
 	if presence, ok := evt.(*events.ChatPresence); ok && presence.SenderAlt.IsEmpty() && presence.Sender.Server == types.HiddenUserServer && s.client.Store != nil && s.client.Store.LIDs != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		pn, err := s.client.Store.LIDs.GetPNForLID(ctx, presence.Sender.ToNonAD())
@@ -286,6 +289,10 @@ func translateEvent(emit func(core.Event), evt any) {
 	case *events.TemporaryBan:
 		emit(core.Event{Type: core.EventError, Err: fmt.Errorf("temporary ban: %s", e.String())})
 	case *events.Message:
+		if reaction := translateReaction(e); reaction != nil {
+			emit(core.Event{Type: core.EventReaction, Reaction: reaction})
+			return
+		}
 		if message := translateMessage(e); message != nil {
 			emit(core.Event{Type: core.EventMessage, Message: message})
 		}

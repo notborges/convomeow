@@ -25,6 +25,8 @@ import (
 )
 
 type fakeConnector struct {
+	reactionCalls    chan core.Reaction
+	failReaction     atomic.Bool
 	presenceCalls    chan core.ChatActivity
 	onlineCalls      chan bool
 	readCalls        chan []string

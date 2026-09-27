@@ -15,6 +15,8 @@ import (
 )
 
 type runtimeAccount struct {
+	reactionMu      sync.Mutex
+	reactionAt      time.Time
 	activity        accountActivity
 	presenceMu      sync.Mutex
 	presenceViewers int
@@ -703,6 +705,8 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		}
 	case core.EventChatPresence:
 		s.receivePresence(id, event.Presence)
+	case core.EventReaction:
+		s.receiveReaction(id, event.Reaction)
 	case core.EventReceipt:
 		if event.Receipt == nil {
 			return

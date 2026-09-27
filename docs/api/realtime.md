@@ -55,3 +55,5 @@ The web composer sends at most one typing refresh every three seconds and sends 
 The connection only sends notifications; commands and file transfers use HTTP. Client application messages close the connection. The server sends a ping every 20 seconds, with a five-second response deadline. Browser authorization is rechecked before each notification and heartbeat.
 
 Each connection has a bounded queue. Queue overflow closes the connection with code `1013`; reconnect and refresh after `ready`. Service shutdown closes the stream. Reconnect with bounded backoff and jitter after network failures. Stop reconnecting when the browser session is no longer valid, and close the stream on sign-out.
+
+Reaction changes use `conversations.changed`; read message summaries or the paginated reactions endpoint for current state. Reactions do not create timeline messages or advance their timestamps.
