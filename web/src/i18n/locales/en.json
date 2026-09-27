@@ -269,5 +269,13 @@
     "notReported": "Not reported",
     "deliveredByRead": "Confirmed by read receipt",
     "more": "More participants"
+  },
+  "presence": {
+    "typing": "Typing…",
+    "recording": "Recording audio…",
+    "personTyping": "{{name}} is typing…",
+    "personRecording": "{{name}} is recording audio…",
+    "others_one": "{{count}} other person",
+    "others_other": "{{count}} other people"
   }
 }

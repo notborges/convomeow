@@ -243,3 +243,12 @@ func refreshConversationTx(ctx context.Context, tx *sql.Tx, conversationID strin
 	_, err = tx.ExecContext(ctx, `UPDATE conversations SET updated_at = ?, last_message_id = ? WHERE id = ?`, occurredAt, messageID, conversationID)
 	return err
 }
+
+func (s *Store) FindConversationID(ctx context.Context, accountID, providerChatID string) (string, error) {
+	var id string
+	err := s.db.QueryRowContext(ctx, `SELECT conversation_id FROM conversation_aliases WHERE account_id=? AND jid=?`, accountID, providerChatID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", core.ErrNotFound
+	}
+	return id, err
+}

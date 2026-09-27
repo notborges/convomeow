@@ -22,6 +22,7 @@ import type { Message } from "../../api/types";
 import { type ErrorKey, errorKey } from "../../i18n/errors";
 import { IconButton } from "../../ui/Button";
 import { motionTiming } from "../../ui/motion";
+import { useTyping } from "../presence/useTyping";
 import { ReplyPreview } from "./ReplyPreview";
 
 function mediaKind(file: File): string {
@@ -49,6 +50,7 @@ export function Composer({
   onSent?: () => void;
 }) {
   const { t } = useTranslation();
+  const typing = useTyping(conversationID, connected);
 
   const reducedMotion = useReducedMotion();
   const attachButton = useRef<HTMLButtonElement>(null);
@@ -105,6 +107,7 @@ export function Composer({
       setError("audioCaption");
       return;
     }
+    typing.stop();
     const previous = retry.current;
     const attempt =
       previous?.text === content &&
@@ -257,7 +260,11 @@ export function Composer({
             }
             aria-label={t(($) => $.composer.message)}
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              setText(event.target.value);
+              typing.input(!!event.target.value.trim());
+            }}
+            onBlur={typing.stop}
             onKeyDown={keyDown}
             disabled={!connected || busy}
           />

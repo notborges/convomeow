@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { PresenceEvent } from "./presence";
 import type { Change } from "./realtime-cache";
 
 export type RealtimeStatus = "connecting" | "connected" | "reconnecting";
@@ -10,7 +11,7 @@ const changeTypes = new Set([
   "avatars.changed",
 ]);
 
-function parseChange(data: string): Change | undefined {
+export function parseChange(data: string): Change | PresenceEvent | undefined {
   let value: unknown;
   try {
     value = JSON.parse(data);
@@ -18,6 +19,23 @@ function parseChange(data: string): Change | undefined {
     return;
   }
   if (!value || typeof value !== "object" || !("type" in value)) return;
+  if (value.type === "presence.changed") {
+    const event = value as Partial<PresenceEvent>;
+    const p = event.presence;
+    if (
+      typeof event.account_id !== "string" ||
+      typeof event.conversation_id !== "string" ||
+      !p ||
+      typeof p.participant_id !== "string" ||
+      (p.display_name !== undefined && typeof p.display_name !== "string") ||
+      !["typing", "recording", "paused"].includes(p.activity) ||
+      typeof p.ttl_ms !== "number" ||
+      !Number.isFinite(p.ttl_ms) ||
+      p.ttl_ms < 0
+    )
+      return;
+    return event as PresenceEvent;
+  }
   if (value.type === "ready") return { type: "ready" };
   if (
     !changeTypes.has(String(value.type)) ||
@@ -36,22 +54,27 @@ function parseChange(data: string): Change | undefined {
 }
 
 export function connectRealtime(
-  receive: (change: Change) => void,
+  receive: (change: Change | PresenceEvent) => void,
   status: (state: RealtimeStatus) => void,
+  presenceAccountID?: string,
 ) {
   let stopped = false;
   let socket: WebSocket | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let attempts = 0;
+  const hidden = () => document.visibilityState === "hidden";
   function connect() {
-    if (stopped) return;
+    if (stopped || hidden()) return;
     const url = new URL("/api/v1/events", location.href);
+    if (presenceAccountID)
+      url.searchParams.set("presence_account_id", presenceAccountID);
     url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
     socket = new WebSocket(url);
     const current = socket;
     const handshake = setTimeout(() => current.close(), 10000);
     current.onmessage = (event) => {
-      if (stopped || typeof event.data !== "string") return;
+      if (stopped || current !== socket || typeof event.data !== "string")
+        return;
       const change = parseChange(event.data);
       if (!change) {
         current.close(4002, "Invalid event");
@@ -66,8 +89,9 @@ export function connectRealtime(
     };
     current.onclose = async () => {
       clearTimeout(handshake);
-      if (stopped) return;
+      if (stopped || current !== socket) return;
       status("reconnecting");
+      if (hidden()) return;
       try {
         const session = await api.session(AbortSignal.timeout(5000));
         if (stopped) return;
@@ -79,15 +103,24 @@ export function connectRealtime(
       } catch {
         /* Network loss is retried by the same reconnect loop. */
       }
-      if (stopped) return;
+      if (stopped || current !== socket || hidden()) return;
       const delay = Math.min(30000, 1000 * 2 ** Math.min(attempts++, 5));
       timer = setTimeout(connect, delay * (0.75 + Math.random() * 0.5));
     };
   }
+  function visibilityChanged() {
+    clearTimeout(timer);
+    if (hidden()) {
+      status("reconnecting");
+      socket?.close(1000, "Tab hidden");
+    } else if (!socket || socket.readyState >= WebSocket.CLOSING) connect();
+  }
+  document.addEventListener("visibilitychange", visibilityChanged);
   status("connecting");
   connect();
   return () => {
     stopped = true;
+    document.removeEventListener("visibilitychange", visibilityChanged);
     clearTimeout(timer);
     socket?.close(1000, "Leaving app");
   };

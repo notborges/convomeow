@@ -114,6 +114,17 @@ func (s *session) closeHistoryQueue() {
 }
 
 func (s *session) handleEvent(evt any) {
+	if presence, ok := evt.(*events.ChatPresence); ok && presence.SenderAlt.IsEmpty() && presence.Sender.Server == types.HiddenUserServer && s.client.Store != nil && s.client.Store.LIDs != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		pn, err := s.client.Store.LIDs.GetPNForLID(ctx, presence.Sender.ToNonAD())
+		cancel()
+		if err == nil && !pn.IsEmpty() {
+			copy := *presence
+			copy.SenderAlt = pn
+			evt = &copy
+		}
+	}
+
 	if receipt, ok := evt.(*events.Receipt); ok && receipt.SenderAlt.IsEmpty() && receipt.Sender.Server == types.HiddenUserServer && s.client.Store != nil && s.client.Store.LIDs != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		pn, err := s.client.Store.LIDs.GetPNForLID(ctx, receipt.Sender.ToNonAD())
@@ -246,6 +257,10 @@ func recipientJID(recipient string) (types.JID, error) {
 
 func translateEvent(emit func(core.Event), evt any) {
 	switch e := evt.(type) {
+	case *events.ChatPresence:
+		if presence := translatePresence(e); presence != nil {
+			emit(core.Event{Type: core.EventChatPresence, Presence: presence})
+		}
 	case *events.Receipt:
 		if receipt := translateReceipt(e); receipt != nil {
 			for start := 0; start < len(receipt.MessageIDs); start += 500 {

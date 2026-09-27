@@ -256,6 +256,7 @@ type LoginStatus struct {
 type EventType string
 
 const (
+	EventChatPresence    EventType = "chat_presence"
 	EventReceipt         EventType = "receipt"
 	EventContactsChanged EventType = "contacts_changed"
 	EventConnected       EventType = "connected"
@@ -270,6 +271,7 @@ const (
 )
 
 type Event struct {
+	Presence      *ChatPresence
 	Receipt       *Receipt
 	Type          EventType
 	Identity      string
@@ -318,6 +320,7 @@ type Connector interface {
 }
 
 type Repository interface {
+	FindConversationID(ctx context.Context, accountID, providerChatID string) (string, error)
 	RecordReadReceipts(ctx context.Context, ids []string, at time.Time) error
 	SaveReceipt(ctx context.Context, accountID string, receipt Receipt) ([]string, error)
 	ListMessageReceipts(ctx context.Context, messageID, after string, limit int) ([]MessageReceipt, error)

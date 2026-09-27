@@ -19,6 +19,7 @@ type Server struct {
 func New(service *app.Service, token string, browserAuth func(*http.Request) bool) http.Handler {
 	s := &Server{service: service, authorized: func(r *http.Request) bool { return authorized(token, browserAuth, r) }}
 	mux := http.NewServeMux()
+	register(mux, "/api/v1/conversations/{id}/presence", map[string]http.HandlerFunc{"POST": s.sendPresence})
 	mux.HandleFunc("GET /api/v1/events", s.events)
 	register(mux, "/api/v1/messages/{id}/receipts", map[string]http.HandlerFunc{"GET": s.listReceipts})
 	register(mux, "/api/v1/conversations/{id}/read-receipts", map[string]http.HandlerFunc{"POST": s.sendReadReceipts})

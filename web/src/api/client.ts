@@ -56,6 +56,17 @@ function pageURL(
 }
 
 export const api = {
+  presence: (
+    conversationID: string,
+    activity: import("./presence").ChatActivity,
+    clientID: string,
+  ) =>
+    request<void>(`/api/v1/conversations/${conversationID}/presence`, {
+      method: "POST",
+      ...json({ activity, client_id: clientID }),
+      signal: AbortSignal.timeout(5000),
+      keepalive: activity === "paused",
+    }),
   session: (signal?: AbortSignal) =>
     request<{ authenticated: boolean }>("/app/session", { signal }),
   login: (token: string) =>

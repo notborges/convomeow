@@ -98,6 +98,9 @@
   font-size: var(--text-sm);
   line-height: 1.4;
 }
+.chat-row__preview .presence-indicator {
+  display: flex;
+}
 .contact-row > span:last-child {
   display: grid;
   min-width: 0;
@@ -846,4 +849,14 @@ button.reply-preview:focus-visible {
 .receipt-list strong {
   font-size: var(--text-md);
   overflow-wrap: anywhere;
+}
+
+.thread-head__default-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.thread-head__subtitle:has(.presence-indicator) .thread-head__default-subtitle {
+  display: none;
 }

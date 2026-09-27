@@ -3,7 +3,14 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Navigate, Route, Routes, useNavigate, useParams } from "react-router";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useMatch,
+  useNavigate,
+  useParams,
+} from "react-router";
 import { api } from "../api/client";
 import { keys } from "../api/queries";
 import type { Account } from "../api/types";
@@ -37,7 +44,8 @@ function MessagingApp() {
 
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
-  const realtime = useRealtime(authenticated === true);
+  const route = useMatch("/accounts/:accountID/*");
+  const realtime = useRealtime(authenticated === true, route?.params.accountID);
 
   useEffect(() => {
     let active = true;

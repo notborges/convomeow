@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "../../api/types";
 import { MessageBubble } from "../../features/chats/MessageBubble";
+import { PresenceIndicator } from "../../features/presence/PresenceIndicator";
 import { AudioPlayer } from "../AudioPlayer";
 import { Avatar } from "../Avatar";
 import { BrandMark } from "../BrandMark";
@@ -54,6 +55,33 @@ export default function DesignSystem() {
           <ThemeToggle />
         </div>
       </header>
+      <section>
+        <h2>{t(($) => $.presence.typing)}</h2>
+        <div className="catalog__row">
+          <PresenceIndicator
+            group={false}
+            people={[
+              {
+                id: "maya",
+                name: "Maya",
+                activity: "typing",
+                expiresAt: Infinity,
+              },
+            ]}
+          />
+          <PresenceIndicator
+            group
+            people={[
+              {
+                id: "maya",
+                name: "Maya",
+                activity: "recording",
+                expiresAt: Infinity,
+              },
+            ]}
+          />
+        </div>
+      </section>
       <section>
         <h2>{t(($) => $.media.audio)}</h2>
         <AudioPlayer />

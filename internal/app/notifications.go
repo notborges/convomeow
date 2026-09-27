@@ -11,6 +11,7 @@ import (
 type ChangeType string
 
 const (
+	PresenceChanged      ChangeType = "presence.changed"
 	AccountsChanged      ChangeType = "accounts.changed"
 	ConversationsChanged ChangeType = "conversations.changed"
 	AttachmentChanged    ChangeType = "attachment.changed"
@@ -18,12 +19,13 @@ const (
 	AvatarsChanged       ChangeType = "avatars.changed"
 )
 
-// Notifications invalidate snapshots; consumers recover missed changes by reading the API.
+// Resource notifications invalidate snapshots; presence is transient and expires.
 type Notification struct {
-	Type           ChangeType `json:"type"`
-	AccountID      string     `json:"account_id"`
-	ConversationID string     `json:"conversation_id,omitempty"`
-	AttachmentID   string     `json:"attachment_id,omitempty"`
+	Presence       *PresenceUpdate `json:"presence,omitempty"`
+	Type           ChangeType      `json:"type"`
+	AccountID      string          `json:"account_id"`
+	ConversationID string          `json:"conversation_id,omitempty"`
+	AttachmentID   string          `json:"attachment_id,omitempty"`
 }
 
 type notifications struct {

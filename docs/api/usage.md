@@ -39,7 +39,7 @@ To send read receipts, post `{"message_ids":["<message-id>"]}` to `/api/v1/conve
 
 ## Live updates
 
-Connect to `/api/v1/events` for WebSocket notifications and fetch changed resources through HTTP. See the [event protocol](realtime.md) for authentication, cache invalidation, and reconnect behavior.
+Connect to `/api/v1/events` for WebSocket notifications and fetch changed resources through HTTP. Chat presence uses temporary events; opt in with `presence_account_id` to mark the selected account online while viewing it. See the [event protocol](realtime.md) for authentication, cache invalidation, and reconnect behavior.
 
 ## History and downloads
 

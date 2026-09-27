@@ -20,6 +20,7 @@ import { EmptyState } from "../../ui/EmptyState";
 import { Loading } from "../../ui/Loading";
 import { motionTiming } from "../../ui/motion";
 import { ProviderBadge } from "../../ui/ProviderBadge";
+import { ChatPresenceIndicator } from "../presence/PresenceIndicator";
 import { Composer } from "./Composer";
 import { ConversationDetails } from "./ConversationDetails";
 import { MessageBubble } from "./MessageBubble";
@@ -189,12 +190,18 @@ export function ChatThread({
             <div className="thread-head__title">
               <strong>{conversation.data.display_name}</strong>
               <span className="thread-head__subtitle">
-                <ProviderBadge provider={account.provider} />
-                <span aria-hidden="true">·</span>
-                {conversation.data.kind === "group"
-                  ? conversation.data.description || t(($) => $.thread.group)
-                  : conversation.data.contact?.phone ||
-                    t(($) => $.thread.direct)}
+                <ChatPresenceIndicator
+                  conversationID={conversationID}
+                  group={conversation.data.kind === "group"}
+                />
+                <span className="thread-head__default-subtitle">
+                  <ProviderBadge provider={account.provider} />
+                  <span aria-hidden="true">·</span>
+                  {conversation.data.kind === "group"
+                    ? conversation.data.description || t(($) => $.thread.group)
+                    : conversation.data.contact?.phone ||
+                      t(($) => $.thread.direct)}
+                </span>
               </span>
             </div>
           </>

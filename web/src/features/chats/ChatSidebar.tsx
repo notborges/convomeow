@@ -26,6 +26,8 @@ import { ProviderBadge } from "../../ui/ProviderBadge";
 import { SegmentedControl } from "../../ui/SegmentedControl";
 import { StatusBadge } from "../../ui/StatusBadge";
 
+import { ChatPresenceIndicator } from "../presence/PresenceIndicator";
+
 interface Props {
   account: Account;
   activeConversationID?: string;
@@ -216,7 +218,12 @@ export function ChatSidebar({
                     </time>
                   </span>
                   <span className="chat-row__preview">
-                    {preview(chat.last_message)}
+                    <ChatPresenceIndicator
+                      conversationID={chat.id}
+                      group={chat.kind === "group"}
+                      announce={false}
+                      fallback={preview(chat.last_message)}
+                    />
                   </span>
                 </span>
               </button>

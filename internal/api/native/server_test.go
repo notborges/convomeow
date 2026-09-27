@@ -25,6 +25,8 @@ import (
 )
 
 type fakeConnector struct {
+	presenceCalls    chan core.ChatActivity
+	onlineCalls      chan bool
 	readCalls        chan []string
 	failReadSender   string
 	preparedMessages chan core.PreparedMessage
@@ -476,6 +478,19 @@ func (s *fakeSession) SendReadReceipts(_ context.Context, _ string, sender strin
 	}
 	if sender == s.connector.failReadSender {
 		return errors.New("receipt failed")
+	}
+	return nil
+}
+
+func (s *fakeSession) SetOnline(_ context.Context, online bool) error {
+	if s.connector.onlineCalls != nil {
+		s.connector.onlineCalls <- online
+	}
+	return nil
+}
+func (s *fakeSession) SendChatPresence(_ context.Context, _ string, activity core.ChatActivity) error {
+	if s.connector.presenceCalls != nil {
+		s.connector.presenceCalls <- activity
 	}
 	return nil
 }

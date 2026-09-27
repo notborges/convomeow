@@ -10,11 +10,16 @@ security:
 paths:
   /api/v1/events:
     get:
+      parameters:
+        - name: presence_account_id
+          in: query
+          description: Keep this account online while the stream is open. The last viewer leaving marks it unavailable.
+          schema: {type: string}
       operationId: streamEvents
       summary: Subscribe to live resource changes
       description: >-
         Upgrade to WebSocket with the existing browser session or bearer token.
-        The stream sends a ready frame, then resource-change notifications.
+        The stream sends a ready frame, then resource-change and transient presence notifications.
         Refresh HTTP data after every connection; notifications are not replayed.
         See realtime.md for message types and connection lifecycle.
       responses:
@@ -650,6 +655,47 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/conversations/{id}/presence:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    post:
+      operationId: sendChatPresence
+      summary: Send typing, recording, or paused activity
+      description: >-
+        Sends transient activity to the provider without saving a message.
+        Throttle repeated activity updates and send paused on inactivity or leaving the chat.
+        Active client leases expire after ten seconds; one client pausing does not cancel another.
+        The server limits unchanged activity refreshes to once per three seconds.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activity, client_id]
+              properties:
+                client_id:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  description: Unique identifier for this composer instance; reuse it for refresh and paused commands.
+                activity:
+                  type: string
+                  enum: [typing, recording, paused]
+      responses:
+        '204':
+          description: Activity sent to the provider.
+        '400':
+          description: Invalid activity or unsupported provider capability.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Account is not connected.
   /api/v1/conversations/{id}/read-receipts:
     parameters:
       - name: id

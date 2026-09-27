@@ -15,7 +15,7 @@ A self-hosted messaging app with a web client, CLI, and HTTP API. Connect multip
 - Send text and files, reply to messages, and jump to quoted messages.
 - View images and play audio in the web client.
 - See delivery and read receipts as they arrive, with recipient details for groups.
-- Receive live updates over WebSocket.
+- Receive live updates, including typing and recording indicators.
 - Store media locally or in AWS S3, Cloudflare R2, and other S3-compatible storage.
 
 WhatsApp is the current provider. The web client uses one access key for all accounts. History coverage depends on what WhatsApp supplies.

@@ -15,16 +15,19 @@ import (
 )
 
 type runtimeAccount struct {
-	mu         sync.RWMutex
-	eventMu    sync.Mutex
-	generation uint64
-	account    core.Account
-	state      string
-	lastError  string
-	loginState string
-	loginID    string
-	challenge  *core.LoginChallenge
-	session    core.Session
+	activity        accountActivity
+	presenceMu      sync.Mutex
+	presenceViewers int
+	mu              sync.RWMutex
+	eventMu         sync.Mutex
+	generation      uint64
+	account         core.Account
+	state           string
+	lastError       string
+	loginState      string
+	loginID         string
+	challenge       *core.LoginChallenge
+	session         core.Session
 }
 
 type Service struct {
@@ -121,6 +124,7 @@ func (s *Service) Close() error {
 	s.mu.RLock()
 	var sessions []core.Session
 	for _, rt := range s.accounts {
+		s.clearActivity(rt)
 		rt.mu.RLock()
 		if rt.session != nil {
 			sessions = append(sessions, rt.session)
@@ -653,15 +657,18 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		rt.lastError = ""
 		rt.challenge = nil
 		rt.mu.Unlock()
+		s.syncOnline(rt)
 		s.scanPendingMedia()
 		s.requestAvatarScan(id)
 	case core.EventDisconnected:
+		s.clearActivity(rt)
 		rt.mu.Lock()
 		if rt.state == "connected" || rt.state == "connecting" || rt.state == "reconnecting" {
 			rt.state = "reconnecting"
 		}
 		rt.mu.Unlock()
 	case core.EventLoggedOut:
+		s.clearActivity(rt)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		rt.mu.Lock()
@@ -694,6 +701,8 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		if event.Err != nil {
 			rt.setError(event.Err)
 		}
+	case core.EventChatPresence:
+		s.receivePresence(id, event.Presence)
 	case core.EventReceipt:
 		if event.Receipt == nil {
 			return

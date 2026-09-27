@@ -269,5 +269,13 @@
     "notReported": "Não informado",
     "deliveredByRead": "Confirmada pelo recibo de leitura",
     "more": "Mais participantes"
+  },
+  "presence": {
+    "typing": "Digitando…",
+    "recording": "Gravando áudio…",
+    "personTyping": "{{name}} está digitando…",
+    "personRecording": "{{name}} está gravando áudio…",
+    "others_one": "mais {{count}} pessoa",
+    "others_other": "mais {{count}} pessoas"
   }
 }
