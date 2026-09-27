@@ -4,13 +4,16 @@ Bug reports and pull requests are welcome. For a bug report, include the command
 
 ## Set up
 
-Install Go 1.27 or newer and a C compiler for SQLite. Clone the repository, then run:
+Install Go 1.27 or newer, Bun, and a C compiler for SQLite. Clone the repository, then run:
 
 ```sh
+cd web
+bun install --frozen-lockfile
+cd ..
 make check
 ```
 
-Use `make fmt` to format Go files. `make check` checks formatting and module files, verifies dependencies, builds, vets, and runs tests with the race detector.
+Use `make fmt` to format Go and frontend files. `make check` runs frontend checks and builds, checks Go formatting and module files, verifies dependencies, builds, vets, and runs Go tests with the race detector.
 
 ## Make a change
 

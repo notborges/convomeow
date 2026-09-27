@@ -2,127 +2,80 @@
 
 # ConvoMeow
 
-ConvoMeow runs WhatsApp accounts on one server through [whatsmeow](https://github.com/tulir/whatsmeow). Its CLI uses a local HTTP API to manage accounts, browse contacts and conversations, send text and files, and read saved messages.
+A self-hosted messaging app with a web client, CLI, and HTTP API. Connect multiple WhatsApp accounts through [whatsmeow](https://github.com/tulir/whatsmeow) and manage them from one server.
 
-## Build and run
+![ConvoMeow web client with fictional conversations](docs/images/web-client.png)
 
-You need Go 1.27 or newer and a C compiler for SQLite (`CGO_ENABLED=1`). Pairing requires a WhatsApp number.
+*Preview with sample data.*
 
-```sh
-go build -o convomeow ./cmd/convomeow
-./convomeow serve
-```
+## Features
 
-In another terminal:
+- Pair accounts by QR code and keep sessions across restarts.
+- Browse conversations and synced contacts, including profile photos.
+- Send text and files, reply to messages, and jump to quoted messages.
+- View images and play audio in the web client.
+- See delivery and read receipts as they arrive, with recipient details for groups.
+- Receive live updates over WebSocket.
+- Store media locally or in AWS S3, Cloudflare R2, and other S3-compatible storage.
 
-```sh
-./convomeow account add sales
-./convomeow account login sales
-./convomeow account list
-./convomeow contact list sales
-./convomeow message send sales +15551234567 'Hello'
-./convomeow message send-file --caption 'Photo' sales +15551234567 image ./photo.png
-./convomeow message send-file sales +15551234567 document ./invoice.pdf
-./convomeow chat list sales
-./convomeow chat messages sales '<conversation-id>'
-./convomeow message list sales
-```
+WhatsApp is the current provider. The web client uses one access key for all accounts. History coverage depends on what WhatsApp supplies.
 
-The daemon listens on `127.0.0.1:8787` and writes to `./data`. Put `--data-dir DIR` before the command to change its data directory. Put `--config FILE` before `serve` to load a different configuration file. You can set these variables:
+## Run locally
 
-| Variable | Purpose |
-| --- | --- |
-| `CONVOMEOW_DATA_DIR` | Data directory for the daemon and CLI |
-| `CONVOMEOW_LISTEN` | Daemon listen address |
-| `CONVOMEOW_URL` | Daemon URL used by the CLI |
-
-The CLI displays a QR code during pairing. Scan it from WhatsApp's **Linked devices** screen. The daemon loads paired sessions from SQLite when it starts. Run one daemon per data directory; the process lock prevents a second daemon from opening the same files.
-
-## Web client
-
-The web client needs Bun to build. From the repository root:
+Install Go 1.27 or newer, Bun, and a C compiler for SQLite. Pairing requires a WhatsApp account on your phone.
 
 ```sh
+git clone https://github.com/notborges/convomeow.git
+cd convomeow
+
 cd web
-bun install
+bun install --frozen-lockfile
 bun run build
 cd ..
+
 go build -o convomeow ./cmd/convomeow
 ./convomeow --web-dir web/dist serve
 ```
 
-Open `http://127.0.0.1:8787/app/` and sign in with the key in `data/control.token`. Browser sign-in lasts 30 days and survives daemon restarts. Sign out to clear it from the browser; changing the access key invalidates existing browser sessions. The client can add and pair accounts, browse chats and contacts, send text and files, and view stored media. Live updates arrive over a WebSocket; messages and files use the HTTP API. Leave out `--web-dir` to run the API and CLI without the web client. For access from another machine, put the daemon behind HTTPS.
+Open [localhost:8787/app/](http://localhost:8787/app/) and sign in with the key from `data/control.token`. Add an account, then scan its QR code from **Linked devices** in WhatsApp on your phone.
 
-For frontend development, run `bun run dev` in `web` while the Go daemon runs on port 8787. Vite proxies API calls to the daemon. `web/bun.lock` records the versions used for a build; `bun update` refreshes them from the `latest` declarations in `web/package.json`.
+The server stores sessions and messages in `./data`. Keep this directory private and back it up. For remote access, put the server behind HTTPS and restrict access. See [configuration and storage](docs/configuration.md) for server settings, access keys, and media storage.
 
-## Native API
+### CLI
 
-The CLI uses ConvoMeow's native API. The [OpenAPI file](docs/api/openapi-v1.yaml) defines the current routes and payloads.
+The CLI talks to the same running server. In another terminal:
 
-On first start, the daemon creates `data/control.token`. Send its value as `Authorization: Bearer <token>` on every `/api/v1` request. The token grants access to all accounts. Keep the API on loopback, or place it behind HTTPS and access controls if you change the listen address.
+```sh
+./convomeow account list
+./convomeow contact list personal
+./convomeow chat list personal
+./convomeow message send personal +15551234567 'Hello'
+./convomeow message send-file --caption 'Photo' personal +15551234567 image ./photo.png
+```
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/healthz`, `/api/versions` | Process health and API versions; no token required |
-| `POST`, `GET` | `/api/v1/accounts` | Create and list accounts |
-| `GET` | `/api/v1/accounts/{id}` | Account connection state |
-| `POST` | `/api/v1/accounts/{id}/login-attempts` | Start pairing |
-| `GET` | `/api/v1/accounts/{id}/login-attempts/{attempt_id}` | Read the QR challenge or pairing state |
-| `POST` | `/api/v1/accounts/{id}/uploads` | Store one file for sending |
-| `DELETE` | `/api/v1/accounts/{id}/uploads/{upload_id}` | Delete an unused upload |
-| `POST` | `/api/v1/accounts/{id}/conversations` | Find or create a conversation for a phone number or synced contact |
-| `GET` | `/api/v1/accounts/{id}/contacts`, `/api/v1/accounts/{id}/contacts/{provider_id}` | List and read synced contacts |
-| `GET` | `/api/v1/accounts/{id}/contacts/{provider_id}/avatar` | Read a contact's profile photo |
-| `GET` | `/api/v1/conversations`, `/api/v1/conversations/{id}` | List and read conversations |
-| `GET` | `/api/v1/conversations/{id}/avatar` | Read a contact or group photo |
-| `GET`, `POST` | `/api/v1/conversations/{id}/messages` | Read a thread or send text or media |
-| `GET` | `/api/v1/messages`, `/api/v1/messages/{id}` | Read an account's messages or one message |
-| `GET` | `/api/v1/attachments/{id}` | Read attachment metadata and availability |
-| `GET`, `HEAD` | `/api/v1/attachments/{id}/content` | Download stored media or request a remote file |
+Replace `personal` with your account label or ID. To pair from the terminal, run `./convomeow account add personal`, then `./convomeow account login personal`.
 
-Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. To start from a synced contact, use `{"target":{"type":"contact","value":"<provider_id>"}}`. Send to the conversation ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
+To run the API and CLI without the web client, build the Go binary and start it with `./convomeow serve`. Bun is only needed for the web client.
 
-To send a file, post one multipart `file` part to the account's uploads route. The response contains an upload ID. Send `{"kind":"image","content":{"upload_id":"<id>","caption":"Photo"}}` to the conversation's messages route with an `Idempotency-Key` header. Images accept JPEG, PNG, or WebP; videos accept MP4 or 3GPP; audio accepts MP3, MP4, Ogg, AAC, or AMR. Documents accept any valid MIME type. Stickers must be static WebP files. Audio and stickers do not accept captions. Each upload belongs to one account, can be sent once, and expires after 24 hours if unused. You can delete an unused upload with its DELETE route.
+## API and documentation
 
-Media sends return `202 Accepted` and a queued message. Poll the `Location` URL until its state is `sent`, `failed`, or `outcome_unknown`. Reuse both the upload ID and idempotency key if a send request fails. The CLI prints those values for a retry with `message send-file --key KEY --upload-id ID ACCOUNT PHONE_OR_CONVERSATION_ID KIND`.
+Use `/api/v1` with the access key as a bearer token. The web client and CLI both use this API; WebSocket carries change notifications.
 
-List responses contain `items` and, when more records exist, `next_cursor`. Pass that value as `?cursor=...` to load older records. Messages use provider timestamps and, when available, provider ordering to break timestamp ties. Messages without ordering metadata use a saved local sequence. Use `?account_id=...` to limit the conversation list to one account; the account message list requires it. The CLI accepts account labels and displays conversation IDs.
-
-ConvoMeow assigns conversation and message IDs. WhatsApp chat IDs appear as read-only `provider_chat_id` values; API paths use ConvoMeow IDs.
-
-The contacts route lists synced contacts, including people with no chat, and accepts `q`, `limit`, and `cursor`. Saved names take priority over business and push names; phone numbers may be unavailable. Conversations include a display name and an avatar URL. After an account connects, ConvoMeow fetches contact and group photo previews in the background and stores them in the active media profile. Cached photos remain available while the account is disconnected. ConvoMeow checks saved photos again after 24 hours and missing photos after six hours. It also refreshes photos when WhatsApp reports a change. If WhatsApp hides or removes a photo, the next check removes the saved copy and the avatar route returns `404`. A photo may stay cached while the account is offline. Logging out clears the account's photo cache.
-
-The API saves an outgoing message before asking WhatsApp to send it. A failed request may leave its state as `outcome_unknown`; check that message before sending again. The CLI prints a retry key when a text send request fails. Media uploads can retry before ConvoMeow calls WhatsApp's send operation. A send error after that point does not trigger an automatic resend.
-
-## Data and limits
-
-`data/app.sqlite` holds accounts, conversations, group details, messages, media metadata, and send jobs. `data/whatsmeow.sqlite` holds WhatsApp sessions and synced contact names. Protect both databases, stored media, and their backups. ConvoMeow creates the data directory, control token, and local media files with owner-only permissions.
-
-ConvoMeow saves live messages and any chat history WhatsApp supplies after pairing or reconnecting. To request earlier messages, post `{"before_message_id":"<saved-message-id>","count":50}` to `/api/v1/conversations/{id}/history-requests`. The server merges returned history into saved messages. A `202` response confirms the request was sent, not that the phone returned history. It attempts to download new images, videos, audio, documents, and stickers in the background. The web client loads images and stickers from imported history as they enter view. Other imported files download on request. A queued file returns `202 Accepted` with `Retry-After`; poll the same URL until it returns the file. The content route supports one `Range: bytes=...` request. `HEAD` checks a stored file without starting a download. Location and shared contact-card messages include only their type.
-
-Media defaults to `data/media`. Copy [config.example.yaml](config.example.yaml) to `data/config.yaml` to set limits or storage profiles. `local` stores files in the data directory by default. For AWS S3, add a profile with `driver: s3`, `bucket`, and `region`; the AWS SDK loads credentials from its standard chain. For Cloudflare R2, also set `endpoint: https://ACCOUNT_ID.r2.cloudflarestorage.com`, `region: auto`, and environment variable names for the access key and secret key. Set `active_profile` to the profile ID used for new files. Leave old profiles configured while attachments or avatars still use them; changing the active profile does not move files. Buckets must remain private.
-
-`max_file_bytes` caps each upload and download, `max_total_bytes` caps stored attachments, avatars, and unused uploads, `max_temp_bytes` caps concurrent staging space, and `workers` controls background downloads and sends. The total limit counts ConvoMeow's recorded files, not other objects in a bucket. A blocked download stays `remote`; its content URL returns `413` or `507` until the relevant limit allows it. This release uses one S3 upload per file, so `max_file_bytes` must stay below 5 GiB.
-
-The connector uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
-
-## Code layout
-
-- `cmd/convomeow`: CLI entry point and daemon lifecycle
-- `internal/core`: account and message types, plus the connector contract
-- `internal/app`: account sessions, pairing, and message handling
-- `internal/providers/whatsapp`: whatsmeow adapter
-- `internal/store/sqlite`: application database and schema
-- `internal/media`: local and S3-compatible file storage
-- `internal/api/native/v1`: authenticated HTTP API and v1 response types
-- `internal/api/web`: optional web client and owner session
-- `web/src`: browser client
-- `internal/cli`: API client and QR display
+- [API guide](docs/api/usage.md): authentication, messaging, media, replies, and receipts
+- [OpenAPI reference](docs/api/openapi-v1.yaml): routes and request/response schemas
+- [WebSocket protocol](docs/api/realtime.md): events and reconnect behavior
+- [Configuration and storage](docs/configuration.md): local data, S3/R2, and limits
 
 ## Development
 
-AI tools assist with code and documentation.
+Run `make check` for the web build, formatting, dependency checks, Go build and vet, and tests with the race detector. Use `make fmt` to format Go and frontend files.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and pull request guidance.
+For frontend development, run the daemon on port 8787 and `bun run dev` in `web`. Vite proxies requests to the daemon. Frontend dependencies use `latest`; `web/bun.lock` records the installed versions. Run `bun update` to refresh them.
 
-ConvoMeow's code is licensed under [Apache-2.0](LICENSE). Whatsmeow remains a separate MPL-2.0 dependency.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance. AI tools assist with code and documentation.
+
+## License and affiliation
+
+ConvoMeow uses the [Apache-2.0 license](LICENSE). Whatsmeow is a separate MPL-2.0 dependency.
+
+ConvoMeow is an independent project, not affiliated with or endorsed by WhatsApp or Meta. It uses an unofficial WhatsApp client. Review [WhatsApp's terms](https://www.whatsapp.com/legal/terms-of-service) before using an account.
