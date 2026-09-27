@@ -19,7 +19,12 @@ export function ReplyPreview({
           reply.sender_id?.split("@")[0] ||
           t(($) => $.reply.unknownSender)}
       </strong>
-      <span>{reply.text || kindLabel(reply.kind)}</span>
+      <span>
+        {reply.text ||
+          (reply.deleted
+            ? t(($) => $.messageChanges.deleted)
+            : kindLabel(reply.kind))}
+      </span>
     </>
   );
   if (reply.message_id && onJump) {

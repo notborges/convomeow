@@ -324,5 +324,21 @@
     "sending": "Sending reaction…",
     "refresh": "Refresh reactions",
     "pickerFailed": "Could not load emoji. Try again."
+  },
+  "messageChanges": {
+    "edit": "Edit message",
+    "save": "Save changes",
+    "revoke": "Delete for everyone",
+    "revokeDescription": "Delete this message for everyone in the conversation? ConvoMeow will keep its saved content and mark it as deleted.",
+    "edited": "edited",
+    "deleted": "Message deleted",
+    "unavailable": "This action is no longer available for this message.",
+    "unconfirmed": "The change could not be confirmed. Close this window and refresh the conversation before trying again.",
+    "history": "Message history",
+    "historyDescription": "Versions saved by ConvoMeow. Earlier changes may not have been received.",
+    "firstSaved": "First saved version",
+    "savedCopy": "Deleted · saved copy",
+    "savedHistory": "Deleted message kept locally. View message history.",
+    "revisionEdited": "Edited"
   }
 }

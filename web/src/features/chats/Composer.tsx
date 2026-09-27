@@ -1,4 +1,5 @@
 import {
+  ArrowTurnBackwardIcon,
   Attachment01Icon,
   Cancel01Icon,
   SendHorizontalIcon,
@@ -36,6 +37,7 @@ export function Composer({
   accountID,
   conversationID,
   connected,
+  capabilities = [],
   reply,
   replySender,
   onClearReply,
@@ -44,13 +46,17 @@ export function Composer({
   accountID: string;
   conversationID: string;
   connected: boolean;
+  capabilities?: string[];
   reply?: Message;
   replySender?: string;
   onClearReply?: (id?: string) => void;
   onSent?: () => void;
 }) {
   const { t } = useTranslation();
-  const typing = useTyping(conversationID, connected);
+  const typing = useTyping(
+    conversationID,
+    connected && capabilities.includes("typing"),
+  );
 
   const reducedMotion = useReducedMotion();
   const attachButton = useRef<HTMLButtonElement>(null);
@@ -102,7 +108,13 @@ export function Composer({
   async function submit(event?: FormEvent) {
     event?.preventDefault();
     const content = text.trim();
-    if ((!content && !file) || !connected || busy) return;
+    if (
+      (!content && !file) ||
+      !connected ||
+      busy ||
+      !capabilities.includes(file ? "send_media" : "send_text")
+    )
+      return;
     if (file && mediaKind(file) === "audio" && content) {
       setError("audioCaption");
       return;
@@ -173,6 +185,12 @@ export function Composer({
       <form className="composer" onSubmit={submit}>
         {reply && (
           <div className="composer-reply">
+            <HugeiconsIcon
+              icon={ArrowTurnBackwardIcon}
+              size={20}
+              className="composer-reply__icon"
+              aria-hidden="true"
+            />
             <ReplyPreview
               sender={replySender}
               reply={{
@@ -232,14 +250,16 @@ export function Composer({
           )}
         </AnimatePresence>
         <div className="composer-row">
-          <IconButton
-            ref={attachButton}
-            label={t(($) => $.composer.attach)}
-            disabled={!connected || busy}
-            onClick={() => input.current?.click()}
-          >
-            <HugeiconsIcon icon={Attachment01Icon} size={21} />
-          </IconButton>
+          {capabilities.includes("send_media") && (
+            <IconButton
+              ref={attachButton}
+              label={t(($) => $.composer.attach)}
+              disabled={!connected || busy}
+              onClick={() => input.current?.click()}
+            >
+              <HugeiconsIcon icon={Attachment01Icon} size={21} />
+            </IconButton>
+          )}
           <input
             ref={input}
             type="file"
@@ -273,7 +293,12 @@ export function Composer({
             variant="primary"
             busy={busy}
             label={t(($) => $.composer.send)}
-            disabled={(!text.trim() && !file) || !connected || busy}
+            disabled={
+              (!text.trim() && !file) ||
+              !connected ||
+              busy ||
+              !capabilities.includes(file ? "send_media" : "send_text")
+            }
           >
             <HugeiconsIcon icon={SendHorizontalIcon} size={20} />
           </IconButton>

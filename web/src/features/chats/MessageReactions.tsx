@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import { keys } from "../../api/queries";
 import type { Message } from "../../api/types";
+import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
 import { Loading } from "../../ui/Loading";
@@ -91,16 +92,18 @@ function ReactionDetails({
         <p>{t(($) => $.reactions.empty)}</p>
       ) : (
         <ul className="reaction-details__list">
-          {items.map((item) => (
-            <li key={item.participant_id}>
-              <span>
-                {item.is_own
-                  ? t(($) => $.reactions.you)
-                  : item.display_name || item.participant_id.split("@")[0]}
-              </span>
-              <span>{item.emoji}</span>
-            </li>
-          ))}
+          {items.map((item) => {
+            const name = item.is_own
+              ? t(($) => $.reactions.you)
+              : item.display_name || item.participant_id.split("@")[0];
+            return (
+              <li key={item.participant_id}>
+                <Avatar name={name} url={item.avatar_url} size="small" />
+                <span className="reaction-details__name">{name}</span>
+                <span className="reaction-details__emoji">{item.emoji}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
       {query.hasNextPage && (

@@ -5,6 +5,7 @@ export interface Page<T> {
 }
 
 export interface Account {
+  capabilities?: string[];
   avatar_url?: string;
   id: string;
   label: string;
@@ -36,6 +37,7 @@ export interface Attachment {
 }
 
 export interface Reply {
+  deleted?: boolean;
   message_id?: string;
   sender_id?: string;
   kind: string;
@@ -67,6 +69,7 @@ export interface ReactionSummary {
   own: boolean;
 }
 export interface MessageReaction {
+  avatar_url?: string;
   participant_id: string;
   display_name?: string;
   is_own: boolean;
@@ -74,6 +77,17 @@ export interface MessageReaction {
   at: string;
 }
 export interface Message {
+  edited_at?: string;
+  deleted_at?: string;
+  actions?: {
+    reply: boolean;
+    react: boolean;
+    edit: boolean;
+    revoke: boolean;
+    receipts: boolean;
+    edit_until?: string;
+    revoke_until?: string;
+  };
   reactions?: ReactionSummary[];
   delivery?: DeliverySummary;
   read_at?: string;
@@ -113,4 +127,11 @@ export interface Problem {
   detail?: string;
   title?: string;
   code?: string;
+}
+
+export interface MessageRevision {
+  id: string;
+  kind: "original" | "edit" | "revoke";
+  text?: string;
+  at: string;
 }

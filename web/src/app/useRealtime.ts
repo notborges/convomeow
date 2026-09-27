@@ -1,11 +1,22 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { api } from "../api/client";
 import { presenceStore } from "../api/presence";
+import { keys } from "../api/queries";
 import { connectRealtime, type RealtimeStatus } from "../api/realtime";
 import { createRealtimeCache } from "../api/realtime-cache";
 
 export function useRealtime(enabled: boolean, accountID?: string) {
   const client = useQueryClient();
+  const accounts = useQuery({
+    queryKey: keys.accounts,
+    queryFn: api.accounts,
+    enabled,
+  });
+  const presenceAccountID = accounts.data?.items.find(
+    (account) =>
+      account.id === accountID && account.capabilities?.includes("typing"),
+  )?.id;
   const [status, setStatus] = useState<RealtimeStatus>("connecting");
   useEffect(() => {
     if (!enabled) return;
@@ -25,13 +36,13 @@ export function useRealtime(enabled: boolean, accountID?: string) {
         setStatus(state);
         if (state !== "connected") presenceStore.clear();
       },
-      accountID,
+      presenceAccountID,
     );
     return () => {
       disconnect();
       cache.close();
       presenceStore.clear();
     };
-  }, [client, enabled, accountID]);
+  }, [client, enabled, presenceAccountID]);
   return status;
 }

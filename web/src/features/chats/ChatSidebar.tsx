@@ -86,7 +86,10 @@ export function ChatSidebar({
     queryFn: ({ pageParam }) => api.contacts(account.id, search, pageParam),
     initialPageParam: "",
     getNextPageParam: (page) => page.next_cursor,
-    enabled: tab === "contacts" && account.state === "connected",
+    enabled:
+      tab === "contacts" &&
+      account.state === "connected" &&
+      !!account.capabilities?.includes("read_contacts"),
     staleTime: 15000,
   });
   const create = useMutation({
@@ -133,7 +136,10 @@ export function ChatSidebar({
           <IconButton
             variant="primary"
             label={t(($) => $.chats.new)}
-            disabled={account.state !== "connected"}
+            disabled={
+              account.state !== "connected" ||
+              !account.capabilities?.includes("start_conversation")
+            }
             onClick={() => {
               setTab("contacts");
               setSearch("");
@@ -156,7 +162,14 @@ export function ChatSidebar({
           value={tab}
           options={[
             { value: "chats", label: t(($) => $.chats.chats) },
-            { value: "contacts", label: t(($) => $.chats.contacts) },
+            ...(account.capabilities?.includes("read_contacts")
+              ? [
+                  {
+                    value: "contacts" as const,
+                    label: t(($) => $.chats.contacts),
+                  },
+                ]
+              : []),
           ]}
           onChange={(value) => {
             setTab(value);
@@ -186,7 +199,7 @@ export function ChatSidebar({
                   : t(($) => $.chats.sayHello)
               }
             >
-              {!search && (
+              {!search && account.capabilities?.includes("read_contacts") && (
                 <Button variant="text" onClick={() => setTab("contacts")}>
                   {t(($) => $.chats.browseContacts)}
                 </Button>
@@ -247,7 +260,10 @@ export function ChatSidebar({
           <button
             type="button"
             className="new-number"
-            disabled={account.state !== "connected"}
+            disabled={
+              account.state !== "connected" ||
+              !account.capabilities?.includes("start_conversation")
+            }
             onClick={() => setShowPhone((value) => !value)}
           >
             <span className="new-number__icon">
@@ -308,7 +324,10 @@ export function ChatSidebar({
                   key={contact.provider_id}
                   type="button"
                   className="contact-row"
-                  disabled={create.isPending}
+                  disabled={
+                    create.isPending ||
+                    !account.capabilities?.includes("start_conversation")
+                  }
                   onClick={() =>
                     create.mutate({
                       type: "contact",

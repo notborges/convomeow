@@ -324,5 +324,21 @@
     "sending": "Enviando reação…",
     "refresh": "Atualizar reações",
     "pickerFailed": "Não foi possível carregar os emojis. Tente novamente."
+  },
+  "messageChanges": {
+    "edit": "Editar mensagem",
+    "save": "Salvar alterações",
+    "revoke": "Apagar para todos",
+    "revokeDescription": "Apagar esta mensagem para todos na conversa? O ConvoMeow manterá o conteúdo salvo e marcará a mensagem como apagada.",
+    "edited": "editada",
+    "deleted": "Mensagem apagada",
+    "unavailable": "Esta ação não está mais disponível para esta mensagem.",
+    "unconfirmed": "Não foi possível confirmar a alteração. Feche esta janela e atualize a conversa antes de tentar novamente.",
+    "history": "Histórico da mensagem",
+    "historyDescription": "Versões salvas pelo ConvoMeow. Alterações anteriores podem não ter sido recebidas.",
+    "firstSaved": "Primeira versão salva",
+    "savedCopy": "Apagada · cópia salva",
+    "savedHistory": "Mensagem apagada mantida localmente. Ver histórico da mensagem.",
+    "revisionEdited": "Editada"
   }
 }

@@ -346,6 +346,7 @@ export function ChatThread({
         accountID={account.id}
         conversationID={conversationID}
         connected={account.state === "connected"}
+        capabilities={account.capabilities}
         onSent={() => {
           setAnchor("");
           setJumpTarget("");

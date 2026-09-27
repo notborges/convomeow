@@ -3,6 +3,7 @@ import type en from "./locales/en.json";
 
 export type ErrorKey = keyof typeof en.errors;
 const codes: Record<string, ErrorKey> = {
+  unsupported_operation: "unsupported",
   account_not_connected: "connection",
   media_quota: "quota",
   media_busy: "busy",

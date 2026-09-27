@@ -28,6 +28,13 @@ import "./catalog.css";
 export default function DesignSystem() {
   const { t } = useTranslation();
   const sample: Message = {
+    actions: {
+      reply: true,
+      react: true,
+      edit: false,
+      revoke: false,
+      receipts: false,
+    },
     id: "preview",
     account_id: "preview",
     conversation_id: "preview",
@@ -206,6 +213,16 @@ export default function DesignSystem() {
         <h2>{t(($) => $.chats.title)}</h2>
         {replySelected && <p role="status">{t(($) => $.reply.action)}</p>}
         <div className="catalog__messages">
+          <MessageBubble
+            message={{
+              ...sample,
+              id: "deleted-example",
+              direction: "outbound",
+              deleted_at: "2026-01-01T10:02:00Z",
+            }}
+            showSender={false}
+            grouped={false}
+          />
           <MessageBubble
             message={{
               ...sample,

@@ -42,6 +42,9 @@
   --accent-subtle: #eee7fd;
   --outgoing: #7351c9;
   --outgoing-ink: #ffffff;
+  --deleted-surface: var(--surface-subtle);
+  --deleted-border: var(--border-strong);
+  --deleted-ink: var(--text-secondary);
   --receipt-read: #c7f0ff;
   --outgoing-meta: #eee8fc;
   --success: #28744f;

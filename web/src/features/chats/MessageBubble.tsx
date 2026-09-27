@@ -1,3 +1,5 @@
+import { Delete02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
@@ -8,6 +10,8 @@ import { Button } from "../../ui/Button";
 import { AttachmentView } from "./AttachmentView";
 import { DeliveryStatus } from "./DeliveryStatus";
 import { MessageActions } from "./MessageActions";
+import { MessageChangeDialog } from "./MessageChangeDialog";
+import { MessageHistory } from "./MessageHistory";
 import { MessageInfo } from "./MessageInfo";
 import { MessageReactions } from "./MessageReactions";
 import { ReplyPreview } from "./ReplyPreview";
@@ -38,6 +42,8 @@ export function MessageBubble({
   onReact?: (emoji: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const [change, setChange] = useState<"edit" | "revoke">();
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const reaction = useMessageReaction(message, onReact);
   const firstImage = message.attachments?.find(
@@ -56,7 +62,7 @@ export function MessageBubble({
     <article
       id={`message-${message.id}`}
       tabIndex={-1}
-      className={`message ${message.attachments?.length ? "message--media" : ""} ${outgoing ? "message--outgoing" : ""} ${grouped ? "message--grouped" : ""}`}
+      className={`message ${message.reply ? "message--reply" : ""} ${message.deleted_at ? "message--deleted" : ""} ${message.attachments?.length ? "message--media" : ""} ${outgoing ? "message--outgoing" : ""} ${grouped ? "message--grouped" : ""}`}
     >
       <div
         className="message__bubble"
@@ -76,8 +82,10 @@ export function MessageBubble({
               message={message}
               onReply={onReply}
               onInfo={() => setInfoOpen(true)}
+              onHistory={() => setHistoryOpen(true)}
               onReact={(emoji) => reaction.mutate(emoji)}
               busy={reaction.isPending}
+              onChange={setChange}
             />
           )}
         {showSender && message.sender_id && !outgoing && (
@@ -103,14 +111,31 @@ export function MessageBubble({
           />
         ))}
         {content && <p>{content}</p>}
-        {!content && !message.attachments?.length && (
+        {!message.deleted_at && !content && !message.attachments?.length && (
           <p className="message__type">{kindLabel(message.kind)}</p>
         )}
         <div className="message__meta">
+          {message.deleted_at && (
+            <Button
+              variant="ghost"
+              className="message__archive"
+              aria-label={t(($) => $.messageChanges.savedHistory)}
+              title={t(($) => $.messageChanges.savedHistory)}
+              onClick={() => setHistoryOpen(true)}
+            >
+              <HugeiconsIcon icon={Delete02Icon} size={14} aria-hidden="true" />
+              {t(($) => $.messageChanges.savedCopy)}
+            </Button>
+          )}
+          {message.edited_at && !message.deleted_at && (
+            <span>{t(($) => $.messageChanges.edited)}</span>
+          )}
           <time dateTime={message.occurred_at}>
             {messageTime(message.occurred_at)}
           </time>
-          {outgoing && <DeliveryStatus message={message} />}
+          {outgoing && !message.deleted_at && (
+            <DeliveryStatus message={message} />
+          )}
         </div>
         <MessageReactions message={message} />
       </div>
@@ -131,6 +156,19 @@ export function MessageBubble({
             {t(($) => $.reactions.refresh)}
           </Button>
         </div>
+      )}
+      {change && (
+        <MessageChangeDialog
+          message={message}
+          kind={change}
+          onClose={() => setChange(undefined)}
+        />
+      )}
+      {historyOpen && (
+        <MessageHistory
+          message={message}
+          onClose={() => setHistoryOpen(false)}
+        />
       )}
       {infoOpen && (
         <MessageInfo message={message} onClose={() => setInfoOpen(false)} />

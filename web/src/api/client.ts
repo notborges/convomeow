@@ -7,6 +7,7 @@ import type {
   Message,
   MessageReaction,
   MessageReceipt,
+  MessageRevision,
   Page,
   Problem,
 } from "./types";
@@ -144,6 +145,21 @@ export const api = {
         cursor,
       }),
     ),
+  messageRevisions: (id: string, cursor?: string) =>
+    request<Page<MessageRevision>>(
+      pageURL(`/api/v1/messages/${encodeURIComponent(id)}/revisions`, {
+        cursor,
+      }),
+    ),
+  editMessage: (id: string, text: string) =>
+    request<Message>(`/api/v1/messages/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      ...json({ text }),
+    }),
+  revokeMessage: (id: string) =>
+    request<Message>(`/api/v1/messages/${encodeURIComponent(id)}/revoke`, {
+      method: "POST",
+    }),
   setReaction: (id: string, emoji: string) =>
     request<Message>(
       `/api/v1/messages/${encodeURIComponent(id)}/reaction`,

@@ -5,6 +5,8 @@ import {
   ArrowTurnBackwardIcon,
   Cancel01Icon,
   Copy01Icon,
+  Delete02Icon,
+  Edit02Icon,
   InformationCircleIcon,
   SmileIcon,
 } from "@hugeicons/core-free-icons";
@@ -15,6 +17,7 @@ import type { Message } from "../../api/types";
 import { ActionMenu } from "../../ui/ActionMenu";
 import { IconButton } from "../../ui/Button";
 import { EmojiPicker } from "../../ui/EmojiPicker";
+import { useMessageActions } from "./useMessageActions";
 
 const quickEmoji = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
@@ -22,13 +25,17 @@ export function MessageActions({
   message,
   onReply,
   onInfo,
+  onHistory,
   onReact,
+  onChange,
   busy,
 }: {
   message: Message;
   onReply: (message: Message) => void;
   onInfo: () => void;
+  onHistory: () => void;
   onReact: (emoji: string) => void;
+  onChange: (kind: "edit" | "revoke") => void;
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -38,6 +45,7 @@ export function MessageActions({
     "idle",
   );
   const content = message.content.text || message.content.caption;
+  const available = useMessageActions(message);
   const own = message.reactions?.find((item) => item.own)?.emoji;
   const select = (emoji: string) => {
     setPickerOpen(false);
@@ -53,41 +61,68 @@ export function MessageActions({
         side={message.direction === "outbound" ? "left" : "right"}
         onOpen={() => setCopyState("idle")}
         triggerIcon={<HugeiconsIcon icon={ArrowDown01Icon} size={19} />}
-        quickActions={[
-          ...quickEmoji.map((emoji) => ({
-            id: emoji,
-            label: t(($) => $.reactions.chooseEmoji, { emoji }),
-            icon: <span aria-hidden="true">{emoji}</span>,
-            selected: emoji === own,
-            disabled: busy,
-            onSelect: () => select(emoji),
-          })),
-          {
-            id: "more",
-            label: t(($) => $.reactions.moreEmoji),
-            icon: <HugeiconsIcon icon={Add01Icon} size={20} />,
-            disabled: busy,
-            movesFocus: true,
-            onSelect: () => setPickerOpen(true),
-          },
-        ]}
+        quickActions={
+          available.react
+            ? [
+                ...quickEmoji.map((emoji) => ({
+                  id: emoji,
+                  label: t(($) => $.reactions.chooseEmoji, { emoji }),
+                  icon: <span aria-hidden="true">{emoji}</span>,
+                  selected: emoji === own,
+                  disabled: busy,
+                  onSelect: () => select(emoji),
+                })),
+                {
+                  id: "more",
+                  label: t(($) => $.reactions.moreEmoji),
+                  icon: <HugeiconsIcon icon={Add01Icon} size={20} />,
+                  disabled: busy,
+                  movesFocus: true,
+                  onSelect: () => setPickerOpen(true),
+                },
+              ]
+            : []
+        }
         actions={[
-          {
-            id: "reply",
-            label: t(($) => $.reply.action),
-            icon: <HugeiconsIcon icon={ArrowTurnBackwardIcon} size={20} />,
-            movesFocus: true,
-            onSelect: () => onReply(message),
-          },
-          {
-            id: "react",
-            label: t(($) => $.reactions.action),
-            icon: <HugeiconsIcon icon={SmileIcon} size={20} />,
-            movesFocus: true,
-            disabled: busy,
-            onSelect: () => setPickerOpen(true),
-          },
-          ...(own
+          ...(message.edited_at || message.deleted_at
+            ? [
+                {
+                  id: "history",
+                  label: t(($) => $.messageChanges.history),
+                  icon: (
+                    <HugeiconsIcon icon={InformationCircleIcon} size={20} />
+                  ),
+                  movesFocus: true,
+                  onSelect: onHistory,
+                },
+              ]
+            : []),
+          ...(available.reply
+            ? [
+                {
+                  id: "reply",
+                  label: t(($) => $.reply.action),
+                  icon: (
+                    <HugeiconsIcon icon={ArrowTurnBackwardIcon} size={20} />
+                  ),
+                  movesFocus: true,
+                  onSelect: () => onReply(message),
+                },
+              ]
+            : []),
+          ...(available.react
+            ? [
+                {
+                  id: "react",
+                  label: t(($) => $.reactions.action),
+                  icon: <HugeiconsIcon icon={SmileIcon} size={20} />,
+                  movesFocus: true,
+                  disabled: busy,
+                  onSelect: () => setPickerOpen(true),
+                },
+              ]
+            : []),
+          ...(own && available.react
             ? [
                 {
                   id: "remove-reaction",
@@ -98,7 +133,7 @@ export function MessageActions({
                 },
               ]
             : []),
-          ...(message.direction === "outbound"
+          ...(available.receipts
             ? [
                 {
                   id: "info",
@@ -108,6 +143,28 @@ export function MessageActions({
                   ),
                   movesFocus: true,
                   onSelect: onInfo,
+                },
+              ]
+            : []),
+          ...(available.edit
+            ? [
+                {
+                  id: "edit",
+                  label: t(($) => $.messageChanges.edit),
+                  icon: <HugeiconsIcon icon={Edit02Icon} size={20} />,
+                  movesFocus: true,
+                  onSelect: () => onChange("edit"),
+                },
+              ]
+            : []),
+          ...(available.revoke
+            ? [
+                {
+                  id: "revoke",
+                  label: t(($) => $.messageChanges.revoke),
+                  icon: <HugeiconsIcon icon={Delete02Icon} size={20} />,
+                  movesFocus: true,
+                  onSelect: () => onChange("revoke"),
                 },
               ]
             : []),
