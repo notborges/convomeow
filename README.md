@@ -4,7 +4,7 @@
 
 A self-hosted client and API for WhatsApp, powered by [whatsmeow](https://github.com/tulir/whatsmeow). Manage multiple accounts through the web interface, CLI, or HTTP API.
 
-![ConvoMeow web client with fictional conversations](docs/images/web-client.png)
+![ConvoMeow with three demo accounts, image sharing, replies, reactions, and retained deleted messages](docs/images/web-client.png)
 
 *Preview with sample data.*
 
