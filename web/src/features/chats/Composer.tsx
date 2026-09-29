@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   type ChangeEvent,
+  type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
   useEffect,
@@ -99,10 +100,28 @@ export function Composer({
     textarea.current.style.height = `${Math.min(textarea.current.scrollHeight, 140)}px`;
   }, [text]);
 
-  function pick(event: ChangeEvent<HTMLInputElement>) {
-    setFile(event.target.files?.[0]);
+  function attach(file: File) {
+    setFile(file);
     retry.current = undefined;
     setError(undefined);
+    if (input.current) input.current.value = "";
+  }
+
+  function pick(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) attach(file);
+  }
+
+  function paste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!connected || busy || !capabilities.includes("send_media")) return;
+    const file =
+      event.clipboardData.files[0] ??
+      Array.from(event.clipboardData.items)
+        .find((item) => item.kind === "file")
+        ?.getAsFile();
+    if (!file) return;
+    event.preventDefault();
+    attach(file);
   }
 
   async function submit(event?: FormEvent) {
@@ -286,6 +305,7 @@ export function Composer({
             }}
             onBlur={typing.stop}
             onKeyDown={keyDown}
+            onPaste={paste}
             disabled={!connected || busy}
           />
           <IconButton
