@@ -12,6 +12,7 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type RefObject,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -43,6 +44,7 @@ export function Composer({
   replySender,
   onClearReply,
   onSent,
+  inputRef,
 }: {
   accountID: string;
   conversationID: string;
@@ -52,6 +54,7 @@ export function Composer({
   replySender?: string;
   onClearReply?: (id?: string) => void;
   onSent?: () => void;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
 }) {
   const { t } = useTranslation();
   const typing = useTyping(
@@ -67,7 +70,8 @@ export function Composer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorKey>();
   const input = useRef<HTMLInputElement>(null);
-  const textarea = useRef<HTMLTextAreaElement>(null);
+  const localTextarea = useRef<HTMLTextAreaElement>(null);
+  const textarea = inputRef ?? localTextarea;
   const retry = useRef<
     | {
         text: string;
@@ -83,6 +87,10 @@ export function Composer({
   useEffect(() => {
     if (reply) textarea.current?.focus();
   }, [reply]);
+
+  useEffect(() => {
+    textarea.current?.focus({ preventScroll: true });
+  }, [conversationID, textarea]);
 
   useEffect(() => {
     if (!file?.type.startsWith("image/")) {

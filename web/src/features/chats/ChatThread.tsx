@@ -33,6 +33,7 @@ export function ChatThread({
   const [reply, setReply] = useState<Message>();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const timeline = useRef<MessageTimelineHandle>(null);
+  const composerInput = useRef<HTMLTextAreaElement>(null);
   const conversation = useQuery({
     queryKey: keys.conversation(conversationID),
     meta: { accountID: account.id },
@@ -56,6 +57,20 @@ export function ChatThread({
       transition={motionTiming.feedback}
       className="thread"
       aria-label={t(($) => $.thread.conversation)}
+      onClick={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.detail !== 1 ||
+          !(event.target instanceof Element) ||
+          !event.currentTarget.contains(event.target) ||
+          event.target.closest(
+            'button, a, input, textarea, select, label, audio, video, [role="button"], [role="menu"], [role="menuitem"], [role="dialog"], [contenteditable="true"]',
+          ) ||
+          window.getSelection()?.toString()
+        )
+          return;
+        composerInput.current?.focus({ preventScroll: true });
+      }}
     >
       <header className="thread-head">
         <IconButton
@@ -120,6 +135,7 @@ export function ChatThread({
         onReply={(message) => setReply({ ...message })}
       />
       <Composer
+        inputRef={composerInput}
         accountID={account.id}
         conversationID={conversationID}
         connected={account.state === "connected"}
