@@ -52,10 +52,22 @@ The web composer sends at most one typing refresh every three seconds and sends 
 
 ## Connection lifecycle
 
-The connection only sends notifications; commands and file transfers use HTTP. Client application messages close the connection. The server sends a ping every 20 seconds, with a five-second response deadline. Browser authorization is rechecked before each notification and heartbeat.
+Commands and file transfers use HTTP. The event stream accepts only the browser activity frame below; other client application messages close the connection. The server sends a ping every 20 seconds, with a five-second response deadline. Browser authorization is rechecked before each notification and heartbeat.
 
 Each connection has a bounded queue. Queue overflow closes the connection with code `1013`; reconnect and refresh after `ready`. Service shutdown closes the stream. Reconnect with bounded backoff and jitter after network failures. Stop reconnecting when the browser session is no longer valid, and close the stream on sign-out.
 
 Reaction changes use `conversations.changed`; read message summaries or the paginated reactions endpoint for current state. Reactions do not create timeline messages or advance their timestamps.
 
 Edits and deletions also use `conversations.changed`. Refresh messages, revision history and conversation previews. Saved content remains available after provider deletion.
+
+## Browser activity
+
+An authenticated browser with a registered push subscription can send:
+
+```json
+{"type":"browser.activity","subscription_id":"subscription-id","conversation_id":"conversation-id","focused":true}
+```
+
+Set `focused` only when the tab is visible and the window has focus. Use an empty `conversation_id` when no conversation is open. Send changes on navigation, focus, and visibility events, then renew active state every 20 seconds. The state expires after 60 seconds and clears on disconnect. These frames do not change provider presence or send read receipts.
+
+The server checks subscription ownership and the conversation ID. Any focused tab showing the conversation suppresses push for that browser subscription. Other browsers still receive alerts. A focus change after dispatch can still produce an alert. Frames are limited to 1 KiB. Malformed frames or invalid browser authorization close the stream; missing recipients, inaccessible conversations, or disabled push clear activity without interrupting resource updates.

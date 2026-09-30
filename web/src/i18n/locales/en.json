@@ -341,5 +341,40 @@
     "savedCopy": "Deleted · saved copy",
     "savedHistory": "Deleted message kept locally. View message history.",
     "revisionEdited": "Edited"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "preview": "Show message previews",
+    "disable": "Turn off notifications",
+    "enable": "Enable notifications",
+    "changeError": "Could not update notifications. Try again.",
+    "failure": {
+      "setup": "Could not prepare notifications. Refresh the page and try again.",
+      "browser": "Your browser could not enable push notifications. Try another browser or check your connection.",
+      "server": "ConvoMeow could not register this browser for notifications. Check the error below and try again."
+    },
+    "sender": "New conversation",
+    "newMessage": "New message",
+    "media": {
+      "image": "Photo",
+      "video": "Video",
+      "audio": "Audio message",
+      "document": "File",
+      "sticker": "Sticker",
+      "location": "Location",
+      "contact": "Contact"
+    },
+    "status": {
+      "loading": "Setting up notifications…",
+      "unsupported": "This browser cannot receive notifications here. Use a supported browser with HTTPS or localhost.",
+      "unavailable": "Notifications are disabled on this server.",
+      "blocked": "Notifications are blocked. Allow them in your browser’s site settings.",
+      "ready": "The browser will ask for notification permission when you start using the inbox.",
+      "dismissed": "Notifications have not been enabled.",
+      "subscribing": "Waiting for notification permission…",
+      "enabled": "Notifications are on for this browser.",
+      "disabled": "Notifications are off for this browser.",
+      "error": "Could not set up notifications. Try again."
+    }
   }
 }

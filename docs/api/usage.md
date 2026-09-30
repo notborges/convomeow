@@ -4,6 +4,8 @@ The web client and CLI use ConvoMeow's native API. The [OpenAPI file](openapi-v1
 
 On first start, the daemon creates `data/control.token`. Send its value as `Authorization: Bearer <token>` on every `/api/v1` request. The token grants access to all accounts. Keep the API on loopback, or place it behind HTTPS and access controls if you change the listen address.
 
+The web client uses its signed browser session cookie. Browser notification registration and removal require this cookie and a same-origin request; a bearer token alone cannot register a browser recipient.
+
 ## Accounts and messages
 
 Create an account with `{"label":"sales","provider":"whatsapp","connection_kind":"linked_device"}`. To message a new number, create a conversation with `{"target":{"type":"phone_number","value":"+15551234567"}}`. To start from a synced contact, use `{"target":{"type":"contact","value":"<provider_id>"}}`. Send to the conversation ID with `{"kind":"text","content":{"text":"Hello"}}` and an `Idempotency-Key` header. Reuse the same key if you need to retry that request.
@@ -40,6 +42,24 @@ To send read receipts, post `{"message_ids":["<message-id>"]}` to `/api/v1/conve
 ## Live updates
 
 Connect to `/api/v1/events` for WebSocket notifications and fetch changed resources through HTTP. Chat presence uses temporary events; opt in with `presence_account_id` to mark the selected account online while viewing it. See the [event protocol](realtime.md) for authentication, cache invalidation, and reconnect behavior.
+
+## Browser push
+
+`GET /api/v1/notifications/config` returns `enabled` and, when enabled, the public VAPID key in `public_key`. The web client registers its service worker at `/app/notifications-sw.js` and subscribes through the browser's Push API.
+
+Register or reconcile a subscription with `POST /api/v1/notifications/subscriptions`:
+
+```json
+{"endpoint":"https://push.example/subscription","keys":{"p256dh":"<browser-key>","auth":"<browser-secret>"},"locale":"en","preview":true}
+```
+
+Use the endpoint and keys from `PushSubscription.toJSON()`. The response is `{"id":"<subscription-id>"}`. Supported locales are `en` and `pt-BR`; the request is limited to 4 KiB. The server derives session identity and expiry from the cookie. The same endpoint and encryption keys can renew ownership after a new sign-in on this installation. Existing sessions currently share one administrator access key.
+
+`DELETE /api/v1/notifications/subscriptions/{id}` removes a recipient owned by that session and returns `204`. A missing subscription or another session's ID returns `404`. Signing out also removes subscriptions and pending jobs for the session. Subscriptions expire with browser authorization.
+
+Jobs are captured when a new incoming live message is saved. HTTP 404/410 from the push service removes the subscription; network errors, HTTP 429, and server failures retry with backoff and `Retry-After`, up to five attempts within five minutes. Pending work survives daemon restarts. Delivery may repeat if the daemon stops after sending but before recording success; notification tags replace alerts for the same conversation.
+
+See [configuration](../configuration.md#browser-notifications) for hosting requirements and [browser activity frames](realtime.md#browser-activity) for focused-chat suppression.
 
 ## History and downloads
 

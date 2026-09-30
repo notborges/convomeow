@@ -54,6 +54,7 @@ type Service struct {
 	ctx     context.Context
 	media   mediaState
 	avatars avatarState
+	push    *pushState
 }
 
 func New(repo core.Repository, connector core.Connector, logger *slog.Logger) *Service {
@@ -118,6 +119,9 @@ func (s *Service) Start(ctx context.Context) error {
 				s.logger.Error("connect failed", "account_id", id, "error", err)
 			}
 		}(account.ID, session, rt)
+	}
+	if s.push != nil {
+		s.startPushWorkers()
 	}
 	return nil
 }
@@ -746,12 +750,24 @@ func (s *Service) onEvent(id string, generation uint64, event core.Event) {
 		for i := range message.Attachments {
 			message.Attachments[i].AutoFetch = true
 		}
-		saved, err := s.repo.SaveMessage(context.Background(), message)
+		var saved core.Message
+		var err error
+		if s.push != nil {
+			saved, err = s.push.repo.SaveIncomingMessage(s.ctx, message, s.push.options.Generation)
+		} else {
+			saved, err = s.repo.SaveMessage(s.ctx, message)
+		}
 		if err != nil {
 			s.logger.Error("save incoming message failed", "account_id", id, "error", err)
 			return
 		}
 		s.notifyConversation(saved.AccountID, saved.ConversationID)
+		if s.push != nil {
+			select {
+			case s.push.wake <- struct{}{}:
+			default:
+			}
+		}
 		for _, attachment := range saved.Attachments {
 			if attachment.Availability == "remote" {
 				s.queueMedia(attachment.ID)

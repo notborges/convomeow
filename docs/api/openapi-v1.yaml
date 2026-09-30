@@ -7,7 +7,81 @@ info:
     text and media messages, contacts, profile photos, and stored media.
 security:
   - bearerToken: []
+  - browserSession: []
 paths:
+  /api/v1/notifications/config:
+    get:
+      operationId: getNotificationConfig
+      summary: Read browser push availability
+      responses:
+        '200':
+          description: Notification availability and public signing key.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled]
+                properties:
+                  enabled: {type: boolean}
+                  public_key:
+                    type: string
+                    description: Base64url VAPID public key, present when notifications are enabled.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/notifications/subscriptions:
+    post:
+      operationId: registerNotificationSubscription
+      summary: Register this browser for push notifications
+      security:
+        - browserSession: []
+      description: >-
+        Requires a browser session cookie and a same-origin request. The server derives
+        ownership and expiry from the cookie. Matching endpoints and encryption keys
+        reconcile the same browser after a new sign-in. Request bodies are limited to 4 KiB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrowserPushSubscription'
+      responses:
+        '200':
+          description: Subscription saved; use its ID for activity frames and removal.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id: {type: string}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: Browser notifications are disabled on this server.
+  /api/v1/notifications/subscriptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    delete:
+      operationId: deleteNotificationSubscription
+      summary: Remove a browser push subscription
+      security:
+        - browserSession: []
+      responses:
+        '204':
+          description: Subscription and pending notifications removed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/events:
     get:
       parameters:
@@ -20,6 +94,7 @@ paths:
       description: >-
         Upgrade to WebSocket with the existing browser session or bearer token.
         The stream sends a ready frame, then resource-change and transient presence notifications.
+        Browser clients can send browser.activity frames to suppress push for a focused conversation.
         Refresh HTTP data after every connection; notifications are not replayed.
         See realtime.md for message types and connection lifecycle.
       responses:
@@ -1092,6 +1167,11 @@ paths:
           $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: convomeow_session
+      description: Signed browser session from /app/session. Write requests require the same origin.
     bearerToken:
       type: http
       scheme: bearer
@@ -1146,7 +1226,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Unauthorized:
-      description: Bearer token missing or invalid.
+      description: Required bearer token or browser session missing or invalid.
       content:
         application/problem+json:
           schema:
@@ -1176,6 +1256,33 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
   schemas:
+    BrowserPushSubscription:
+      type: object
+      additionalProperties: false
+      required: [endpoint, keys, locale, preview]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Public HTTPS push endpoint supplied by the browser; only port 443 is allowed.
+        keys:
+          type: object
+          additionalProperties: false
+          required: [p256dh, auth]
+          properties:
+            p256dh:
+              type: string
+              description: Base64url uncompressed P-256 public key.
+            auth:
+              type: string
+              description: Base64url 16-byte authentication secret.
+        locale:
+          type: string
+          enum: [en, pt-BR]
+        preview:
+          type: boolean
+          description: Include message content and media type; account and conversation names remain visible.
     Problem:
       type: object
       required: [type, title, status, detail, code, request_id]

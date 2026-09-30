@@ -9,16 +9,32 @@ import (
 
 	"github.com/notborges/convomeow/internal/app"
 	"github.com/notborges/convomeow/internal/core"
+	"github.com/notborges/convomeow/internal/notifications"
 )
 
 type Server struct {
-	authorized func(*http.Request) bool
-	service    *app.Service
+	authorized     func(*http.Request) bool
+	service        *app.Service
+	browserSession func(*http.Request) (notifications.Session, bool)
 }
 
-func New(service *app.Service, token string, browserAuth func(*http.Request) bool) http.Handler {
-	s := &Server{service: service, authorized: func(r *http.Request) bool { return authorized(token, browserAuth, r) }}
+type BrowserAuth struct {
+	Authenticated func(*http.Request) bool
+	Session       func(*http.Request) (notifications.Session, bool)
+}
+
+func New(service *app.Service, token string, browser *BrowserAuth) http.Handler {
+	s := &Server{service: service}
+	var browserAuth func(*http.Request) bool
+	if browser != nil {
+		browserAuth = browser.Authenticated
+		s.browserSession = browser.Session
+	}
+	s.authorized = func(r *http.Request) bool { return authorized(token, browserAuth, r) }
 	mux := http.NewServeMux()
+	register(mux, "/api/v1/notifications/config", map[string]http.HandlerFunc{"GET": s.notificationConfig})
+	register(mux, "/api/v1/notifications/subscriptions", map[string]http.HandlerFunc{"POST": s.registerNotificationSubscription})
+	register(mux, "/api/v1/notifications/subscriptions/{id}", map[string]http.HandlerFunc{"DELETE": s.deleteNotificationSubscription})
 	register(mux, "/api/v1/messages/{id}/revisions", map[string]http.HandlerFunc{"GET": s.messageRevisions})
 	register(mux, "/api/v1/messages/{id}/revoke", map[string]http.HandlerFunc{"POST": s.revokeMessage})
 	register(mux, "/api/v1/conversations/{id}/presence", map[string]http.HandlerFunc{"POST": s.sendPresence})

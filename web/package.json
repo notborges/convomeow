@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
+    "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",

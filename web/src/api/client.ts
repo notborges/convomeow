@@ -58,6 +58,31 @@ function pageURL(
 }
 
 export const api = {
+  notificationConfig: (signal?: AbortSignal) =>
+    request<{ enabled: boolean; public_key?: string }>(
+      "/api/v1/notifications/config",
+      { signal },
+    ),
+  registerNotifications: (
+    subscription: PushSubscription,
+    locale: string,
+    preview: boolean,
+  ) =>
+    request<{ id: string }>("/api/v1/notifications/subscriptions", {
+      method: "POST",
+      signal: AbortSignal.timeout(10000),
+      ...json({
+        endpoint: subscription.endpoint,
+        keys: subscription.toJSON().keys,
+        locale,
+        preview,
+      }),
+    }),
+  deleteNotifications: (id: string) =>
+    request<void>(
+      `/api/v1/notifications/subscriptions/${encodeURIComponent(id)}`,
+      { method: "DELETE", signal: AbortSignal.timeout(10000) },
+    ),
   presence: (
     conversationID: string,
     activity: import("./presence").ChatActivity,

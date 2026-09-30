@@ -32,7 +32,7 @@ func TestEventStreamAuthenticationAndCommittedChanges(t *testing.T) {
 	}
 	defer service.Close()
 	var browserAllowed atomic.Bool
-	server := httptest.NewServer(v1.New(service, "test-token", func(*http.Request) bool { return browserAllowed.Load() }))
+	server := httptest.NewServer(v1.New(service, "test-token", &v1.BrowserAuth{Authenticated: func(*http.Request) bool { return browserAllowed.Load() }}))
 	defer server.Close()
 	url := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/events"
 	for _, headers := range []http.Header{{}, {"Authorization": {"Bearer test-token"}, "Origin": {"https://other.example"}}} {

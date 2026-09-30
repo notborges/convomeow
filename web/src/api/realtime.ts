@@ -57,12 +57,39 @@ export function connectRealtime(
   receive: (change: Change | PresenceEvent) => void,
   status: (state: RealtimeStatus) => void,
   presenceAccountID?: string,
+  activity?: () =>
+    | { subscription_id: string; conversation_id?: string }
+    | undefined,
 ) {
   let stopped = false;
   let socket: WebSocket | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let activityTimer: ReturnType<typeof setInterval> | undefined;
   let attempts = 0;
   const hidden = () => document.visibilityState === "hidden";
+  function reportActivity() {
+    const view = activity?.();
+    const focused = !hidden() && document.hasFocus();
+    if (view && socket?.readyState === WebSocket.OPEN)
+      socket.send(
+        JSON.stringify({
+          type: "browser.activity",
+          ...view,
+          conversation_id: view.conversation_id ?? "",
+          focused,
+        }),
+      );
+    if (
+      view?.conversation_id &&
+      focused &&
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      activityTimer ??= setInterval(reportActivity, 20000);
+    } else {
+      clearInterval(activityTimer);
+      activityTimer = undefined;
+    }
+  }
   function connect() {
     if (stopped || hidden()) return;
     const url = new URL("/api/v1/events", location.href);
@@ -84,12 +111,15 @@ export function connectRealtime(
         clearTimeout(handshake);
         attempts = 0;
         status("connected");
+        reportActivity();
       }
       receive(change);
     };
     current.onclose = async () => {
       clearTimeout(handshake);
       if (stopped || current !== socket) return;
+      clearInterval(activityTimer);
+      activityTimer = undefined;
       status("reconnecting");
       if (hidden()) return;
       try {
@@ -111,16 +141,24 @@ export function connectRealtime(
   function visibilityChanged() {
     clearTimeout(timer);
     if (hidden()) {
+      reportActivity();
       status("reconnecting");
       socket?.close(1000, "Tab hidden");
     } else if (!socket || socket.readyState >= WebSocket.CLOSING) connect();
   }
   document.addEventListener("visibilitychange", visibilityChanged);
+  window.addEventListener("focus", reportActivity);
+  window.addEventListener("blur", reportActivity);
+  window.addEventListener("convomeow:notification-view", reportActivity);
   status("connecting");
   connect();
   return () => {
     stopped = true;
     document.removeEventListener("visibilitychange", visibilityChanged);
+    window.removeEventListener("focus", reportActivity);
+    window.removeEventListener("blur", reportActivity);
+    window.removeEventListener("convomeow:notification-view", reportActivity);
+    clearInterval(activityTimer);
     clearTimeout(timer);
     socket?.close(1000, "Leaving app");
   };

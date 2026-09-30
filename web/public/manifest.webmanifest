@@ -1,0 +1,11 @@
+{
+  "id": "/app/",
+  "name": "ConvoMeow",
+  "short_name": "ConvoMeow",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#eeedf4",
+  "theme_color": "#eeedf4",
+  "icons": [{ "src": "brand/convomeow.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any" }]
+}

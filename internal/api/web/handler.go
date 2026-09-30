@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -12,13 +13,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/notborges/convomeow/internal/notifications"
 )
 
 const sessionCookie = "convomeow_session"
 
 type Handler struct {
-	files fs.FS
-	token string
+	files    fs.FS
+	token    string
+	onLogout func(context.Context, notifications.Session) error
+}
+
+func (h *Handler) SetLogoutHandler(fn func(context.Context, notifications.Session) error) {
+	h.onLogout = fn
 }
 
 func New(dir, token string) (*Handler, error) {
@@ -86,6 +94,13 @@ func (h *Handler) sessionRequest(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if h.onLogout != nil {
+			owner, _ := h.BrowserSession(r)
+			if err := h.onLogout(r.Context(), owner); err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
 		h.setCookie(w, r, "", -1)
 		w.WriteHeader(http.StatusNoContent)
 	default:
@@ -119,7 +134,7 @@ func (h *Handler) file(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if name == "index.html" {
+	if name == "index.html" || name == "notifications-sw.js" || name == "manifest.webmanifest" {
 		w.Header().Set("Cache-Control", "no-cache")
 	} else if strings.HasPrefix(name, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")

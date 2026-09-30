@@ -45,6 +45,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := s.initNotifications(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := s.recoverSends(ctx); err != nil {
 		db.Close()
 		return nil, err

@@ -16,6 +16,7 @@ import { TextField } from "../../ui/Field";
 import { LanguageSwitcher } from "../../ui/LanguageSwitcher";
 import { ProviderBadge, providerName } from "../../ui/ProviderBadge";
 import { ThemeToggle } from "../../ui/ThemeToggle";
+import { NotificationSettings } from "../notifications/NotificationSettings";
 
 interface Props {
   accounts: Account[];
@@ -109,6 +110,7 @@ export function AccountRail({
         </IconButton>
       </div>
       <div className="rail-footer">
+        <NotificationSettings />
         <LanguageSwitcher rail />
         <ThemeToggle />
         <IconButton

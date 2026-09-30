@@ -78,7 +78,7 @@ func decodeRequest(w http.ResponseWriter, r *http.Request, dst any) bool {
 		case errors.Is(err, errUnsupportedMediaType):
 			writeProblem(w, r, http.StatusUnsupportedMediaType, "unsupported_media_type", err.Error())
 		case errors.As(err, &sizeError):
-			writeProblem(w, r, http.StatusRequestEntityTooLarge, "request_too_large", "JSON body exceeds 1 MiB.")
+			writeProblem(w, r, http.StatusRequestEntityTooLarge, "request_too_large", "JSON body exceeds the request size limit.")
 		default:
 			writeProblem(w, r, http.StatusBadRequest, "invalid_json", err.Error())
 		}

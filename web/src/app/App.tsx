@@ -19,6 +19,8 @@ import { PairingDialog } from "../features/accounts/PairingDialog";
 import { Login } from "../features/auth/Login";
 import { ChatSidebar } from "../features/chats/ChatSidebar";
 import { ChatThread } from "../features/chats/ChatThread";
+import { NotificationContext } from "../features/notifications/NotificationSettings";
+import { useBrowserNotifications } from "../features/notifications/useBrowserNotifications";
 import { Button } from "../ui/Button";
 import { EmptyState } from "../ui/EmptyState";
 import { Loading } from "../ui/Loading";
@@ -45,7 +47,25 @@ function MessagingApp() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
   const route = useMatch("/accounts/:accountID/*");
-  const realtime = useRealtime(authenticated === true, route?.params.accountID);
+  const thread = useMatch("/accounts/:accountID/chats/:conversationID");
+  const notifications = useBrowserNotifications(authenticated === true);
+  const realtime = useRealtime(
+    authenticated === true,
+    route?.params.accountID,
+    notifications.subscriptionID,
+    thread?.params.conversationID,
+  );
+
+  async function logout() {
+    await api.logout();
+    queryClient.clear();
+    setAuthenticated(false);
+    try {
+      localStorage.setItem("convomeow-logout", crypto.randomUUID());
+    } catch {
+      /* Other tabs also detect the cleared session through their API requests. */
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -61,10 +81,15 @@ function MessagingApp() {
       queryClient.clear();
       setAuthenticated(false);
     };
+    const sessionChanged = (event: StorageEvent) => {
+      if (event.key === "convomeow-logout") unauthorized();
+    };
     window.addEventListener("convomeow:unauthorized", unauthorized);
+    window.addEventListener("storage", sessionChanged);
     return () => {
       active = false;
       window.removeEventListener("convomeow:unauthorized", unauthorized);
+      window.removeEventListener("storage", sessionChanged);
     };
   }, [queryClient]);
 
@@ -77,7 +102,7 @@ function MessagingApp() {
   if (!authenticated) return <Login onLogin={() => setAuthenticated(true)} />;
 
   return (
-    <>
+    <NotificationContext value={notifications}>
       {realtime !== "connected" && (
         <div className="realtime-status" role="status">
           {realtime === "connecting"
@@ -86,46 +111,22 @@ function MessagingApp() {
         </div>
       )}
       <Routes>
-        <Route
-          path="/"
-          element={
-            <Inbox
-              onLogout={() => {
-                queryClient.clear();
-                setAuthenticated(false);
-              }}
-            />
-          }
-        />
+        <Route path="/" element={<Inbox onLogout={logout} />} />
         <Route
           path="/accounts/:accountID/chats"
-          element={
-            <Inbox
-              onLogout={() => {
-                queryClient.clear();
-                setAuthenticated(false);
-              }}
-            />
-          }
+          element={<Inbox onLogout={logout} />}
         />
         <Route
           path="/accounts/:accountID/chats/:conversationID"
-          element={
-            <Inbox
-              onLogout={() => {
-                queryClient.clear();
-                setAuthenticated(false);
-              }}
-            />
-          }
+          element={<Inbox onLogout={logout} />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </NotificationContext>
   );
 }
 
-function Inbox({ onLogout }: { onLogout: () => void }) {
+function Inbox({ onLogout }: { onLogout: () => Promise<void> }) {
   const { t } = useTranslation();
 
   const { accountID, conversationID } = useParams();
@@ -147,11 +148,6 @@ function Inbox({ onLogout }: { onLogout: () => void }) {
     }
   }, [accountsQuery.isSuccess, accounts, selected, navigate]);
 
-  async function logout() {
-    await api.logout();
-    onLogout();
-  }
-
   return (
     <div
       className={`workspace ${conversationID ? "workspace--thread-open" : ""}`}
@@ -161,7 +157,7 @@ function Inbox({ onLogout }: { onLogout: () => void }) {
         selectedID={selected?.id}
         onSelect={(id) => navigate(`/accounts/${id}/chats`)}
         onCreated={(id) => navigate(`/accounts/${id}/chats`)}
-        onLogout={logout}
+        onLogout={onLogout}
       />
       {accountsQuery.isPending ? (
         <div className="sidebar">

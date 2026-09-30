@@ -17,6 +17,14 @@ import (
 const messageColumns = `public_id, account_id, conversation_id, chat_id, provider_message_id, direction, state, sender_id, kind, text, content_json, occurred_at, ingested_at, provider_order, local_order`
 
 func (s *Store) SaveMessage(ctx context.Context, m core.Message) (core.Message, error) {
+	return s.saveMessage(ctx, m, "")
+}
+
+func (s *Store) SaveIncomingMessage(ctx context.Context, m core.Message, generation string) (core.Message, error) {
+	return s.saveMessage(ctx, m, generation)
+}
+
+func (s *Store) saveMessage(ctx context.Context, m core.Message, generation string) (core.Message, error) {
 	if m.AccountID == "" || m.ChatID == "" || m.ProviderMessageID == "" || m.Direction == "" {
 		return core.Message{}, core.ErrInvalid
 	}
@@ -28,12 +36,31 @@ func (s *Store) SaveMessage(ctx context.Context, m core.Message) (core.Message, 
 		return core.Message{}, err
 	}
 	defer tx.Rollback()
+	var existing bool
+	if generation != "" && m.Direction == "inbound" {
+		if m.ConversationID == "" {
+			conversation, _, err := ensureConversationTx(ctx, tx, m.AccountID, m.ChatID, nil, m.IngestedAt)
+			if err != nil {
+				return core.Message{}, err
+			}
+			m.ConversationID = conversation.ID
+		}
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM messages WHERE account_id = ? AND conversation_id = ? AND provider_message_id = ?)`,
+			m.AccountID, m.ConversationID, m.ProviderMessageID).Scan(&existing); err != nil {
+			return core.Message{}, err
+		}
+	}
 	saved, err := saveMessageTx(ctx, tx, m)
 	if err != nil {
 		return core.Message{}, err
 	}
 	if err := refreshConversationTx(ctx, tx, saved.ConversationID); err != nil {
 		return core.Message{}, err
+	}
+	if generation != "" && m.Direction == "inbound" && saved.Direction == "inbound" && !existing {
+		if err := enqueueNotificationsTx(ctx, tx, saved.ID, generation, time.Now().UTC()); err != nil {
+			return core.Message{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return core.Message{}, err

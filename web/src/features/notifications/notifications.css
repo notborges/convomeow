@@ -1,0 +1,19 @@
+.notification-settings {
+  display: grid;
+  gap: var(--space-5);
+}
+.notification-settings > p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.notification-preference {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+.notification-preference input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}

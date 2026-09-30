@@ -1,3 +1,7 @@
+notifications:
+  enabled: true
+  contact: https://github.com/notborges/convomeow
+
 media:
   active_profile: local
   max_file_bytes: 268435456

@@ -341,5 +341,40 @@
     "savedCopy": "Apagada · cópia salva",
     "savedHistory": "Mensagem apagada mantida localmente. Ver histórico da mensagem.",
     "revisionEdited": "Editada"
+  },
+  "notifications": {
+    "title": "Notificações",
+    "preview": "Mostrar prévias das mensagens",
+    "disable": "Desativar notificações",
+    "enable": "Ativar notificações",
+    "changeError": "Não foi possível atualizar as notificações. Tente novamente.",
+    "failure": {
+      "setup": "Não foi possível preparar as notificações. Atualize a página e tente novamente.",
+      "browser": "Seu navegador não conseguiu ativar as notificações push. Tente outro navegador ou verifique sua conexão.",
+      "server": "O ConvoMeow não conseguiu registrar este navegador para notificações. Verifique o erro abaixo e tente novamente."
+    },
+    "sender": "Nova conversa",
+    "newMessage": "Nova mensagem",
+    "media": {
+      "image": "Foto",
+      "video": "Vídeo",
+      "audio": "Mensagem de áudio",
+      "document": "Arquivo",
+      "sticker": "Figurinha",
+      "location": "Localização",
+      "contact": "Contato"
+    },
+    "status": {
+      "loading": "Configurando notificações…",
+      "unsupported": "Este navegador não pode receber notificações aqui. Use um navegador compatível com HTTPS ou localhost.",
+      "unavailable": "As notificações estão desativadas neste servidor.",
+      "blocked": "As notificações estão bloqueadas. Permita-as nas configurações do site no navegador.",
+      "ready": "O navegador pedirá permissão para notificações quando você começar a usar as conversas.",
+      "dismissed": "As notificações ainda não foram ativadas.",
+      "subscribing": "Aguardando permissão para notificações…",
+      "enabled": "As notificações estão ativadas neste navegador.",
+      "disabled": "As notificações estão desativadas neste navegador.",
+      "error": "Não foi possível configurar as notificações. Tente novamente."
+    }
   }
 }

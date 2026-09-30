@@ -19,6 +19,8 @@ import (
 	"github.com/notborges/convomeow/internal/cli"
 	"github.com/notborges/convomeow/internal/config"
 	"github.com/notborges/convomeow/internal/media"
+	"github.com/notborges/convomeow/internal/notifications"
+	"github.com/notborges/convomeow/internal/notifications/webpush"
 	"github.com/notborges/convomeow/internal/providers/whatsapp"
 	"github.com/notborges/convomeow/internal/store/sqlite"
 )
@@ -118,6 +120,25 @@ func serve(paths config.Paths, listen, configPath, webDir string) error {
 	service := app.NewWithMedia(repo, connector, slog.Default(), app.MediaOptions{Stores: registry,
 		TempDir: filepath.Join(paths.Dir, "media-tmp"), MaxFileBytes: mediaConfig.MaxFileBytes,
 		MaxTotalBytes: mediaConfig.MaxTotalBytes, MaxTempBytes: mediaConfig.MaxTempBytes, Workers: mediaConfig.Workers})
+	if webDir != "" {
+		cfg, err := config.LoadNotifications(configPath)
+		if err != nil {
+			service.Close()
+			return fmt.Errorf("load notification configuration: %w", err)
+		}
+		if *cfg.Enabled {
+			keys, err := config.LoadVAPIDKeys(paths.Dir)
+			if err != nil {
+				service.Close()
+				return fmt.Errorf("load notification keys: %w", err)
+			}
+			if err := service.ConfigureNotifications(app.PushOptions{PublicKey: keys.Public, Generation: notifications.Generation(token),
+				Sender: &webpush.Transport{PublicKey: keys.Public, PrivateKey: keys.Private, Contact: cfg.Contact, Client: webpush.NewClient()}}); err != nil {
+				service.Close()
+				return err
+			}
+		}
+	}
 	if err := service.Start(ctx); err != nil {
 		service.Close()
 		return fmt.Errorf("start accounts: %w", err)

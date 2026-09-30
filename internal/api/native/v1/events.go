@@ -1,12 +1,17 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
+	"github.com/notborges/convomeow/internal/core"
 )
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +28,52 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(1024)
-	ctx := conn.CloseRead(r.Context())
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	connectionID := uuid.NewString()
+	readDone := make(chan struct{})
+	defer func() {
+		cancel()
+		conn.CloseNow()
+		<-readDone
+		s.service.ClearBrowserView(connectionID)
+	}()
+	go func() {
+		defer close(readDone)
+		defer cancel()
+		for {
+			kind, data, err := conn.Read(ctx)
+			if err != nil {
+				return
+			}
+			var activity struct {
+				Type           string `json:"type"`
+				SubscriptionID string `json:"subscription_id"`
+				ConversationID string `json:"conversation_id"`
+				Focused        bool   `json:"focused"`
+			}
+			decoder := json.NewDecoder(bytes.NewReader(data))
+			decoder.DisallowUnknownFields()
+			if kind != websocket.MessageText || decoder.Decode(&activity) != nil || decoder.Decode(new(any)) != io.EOF || activity.Type != "browser.activity" || s.browserSession == nil {
+				return
+			}
+			owner, ok := s.browserSession(r)
+			if !ok {
+				return
+			}
+			if !activity.Focused {
+				activity.ConversationID = ""
+			}
+			if err := s.service.SetBrowserView(ctx, connectionID, activity.SubscriptionID, activity.ConversationID, owner); err != nil {
+				// Expired recipients must not interrupt the resource stream.
+				if errors.Is(err, core.ErrNotFound) || errors.Is(err, core.ErrUnsupported) {
+					s.service.ClearBrowserView(connectionID)
+					continue
+				}
+				return
+			}
+		}
+	}()
 	changes, unsubscribe := s.service.Subscribe()
 	defer unsubscribe()
 	if accountID != "" {

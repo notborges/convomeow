@@ -1,12 +1,22 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { presenceStore } from "../api/presence";
 import { keys } from "../api/queries";
 import { connectRealtime, type RealtimeStatus } from "../api/realtime";
 import { createRealtimeCache } from "../api/realtime-cache";
 
-export function useRealtime(enabled: boolean, accountID?: string) {
+export function useRealtime(
+  enabled: boolean,
+  accountID?: string,
+  subscriptionID?: string,
+  conversationID?: string,
+) {
+  const view = useRef({ subscriptionID, conversationID });
+  view.current = { subscriptionID, conversationID };
+  useEffect(() => {
+    window.dispatchEvent(new Event("convomeow:notification-view"));
+  }, [subscriptionID, conversationID]);
   const client = useQueryClient();
   const accounts = useQuery({
     queryKey: keys.accounts,
@@ -37,6 +47,13 @@ export function useRealtime(enabled: boolean, accountID?: string) {
         if (state !== "connected") presenceStore.clear();
       },
       presenceAccountID,
+      () =>
+        view.current.subscriptionID
+          ? {
+              subscription_id: view.current.subscriptionID,
+              conversation_id: view.current.conversationID,
+            }
+          : undefined,
     );
     return () => {
       disconnect();

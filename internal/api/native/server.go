@@ -31,9 +31,10 @@ func newServer(service *app.Service, token string, ui *web.Handler) http.Handler
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"versions": []string{"v1"}})
 	})
-	var browserAuth func(*http.Request) bool
+	var browserAuth *v1.BrowserAuth
 	if ui != nil {
-		browserAuth = ui.Authenticated
+		browserAuth = &v1.BrowserAuth{Authenticated: ui.Authenticated, Session: ui.BrowserSession}
+		ui.SetLogoutHandler(service.RevokeNotificationSession)
 		mux.Handle("/app", ui)
 		mux.Handle("/app/", ui)
 	}

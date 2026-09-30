@@ -3,13 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 const maxSingleUpload = 5<<30 - 1
@@ -50,26 +47,8 @@ func DefaultMediaConfig(dataDir string) MediaConfig {
 
 func LoadMedia(path, dataDir string) (MediaConfig, error) {
 	cfg := DefaultMediaConfig(dataDir)
-	f, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return cfg, nil
-	}
+	input, err := readConfig(path)
 	if err != nil {
-		return MediaConfig{}, err
-	}
-	defer f.Close()
-	var input struct {
-		Media *MediaConfig `yaml:"media"`
-	}
-	decoder := yaml.NewDecoder(f)
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&input); err != nil {
-		return MediaConfig{}, fmt.Errorf("read media config: %w", err)
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		if err == nil {
-			return MediaConfig{}, errors.New("media config must contain one document")
-		}
 		return MediaConfig{}, err
 	}
 	if input.Media == nil {
