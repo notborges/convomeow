@@ -117,6 +117,10 @@ func respondError(w http.ResponseWriter, r *http.Request, err error) {
 		writeProblem(w, r, http.StatusBadGateway, "message_change_unconfirmed", "The message change could not be confirmed. Refresh before retrying.")
 	case errors.Is(err, core.ErrReactionUnconfirmed):
 		writeProblem(w, r, http.StatusBadGateway, "reaction_unconfirmed", "Reaction could not be confirmed. Refresh before trying again.")
+	case errors.Is(err, core.ErrNotParticipant):
+		writeProblem(w, r, http.StatusForbidden, "not_group_participant", "Account is not a participant in this group.")
+	case errors.Is(err, core.ErrForbidden):
+		writeProblem(w, r, http.StatusForbidden, "forbidden", "Account does not have permission for this action.")
 	case errors.Is(err, core.ErrNotFound):
 		writeProblem(w, r, http.StatusNotFound, "not_found", "Resource not found.")
 	case errors.Is(err, core.ErrIdempotency):

@@ -2,8 +2,10 @@ import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { motion } from "motion/react";
 import {
+  createContext,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
   useEffect,
   useId,
   useRef,
@@ -11,6 +13,11 @@ import {
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "./Button";
+
+// A modal dialog makes everything outside it inert, so popups opened from
+// inside it must render within the dialog element.
+export const PopupContainer =
+  createContext<RefObject<HTMLElement | null> | null>(null);
 
 function isBackdrop(event: PointerEvent<HTMLDialogElement>) {
   if (event.target !== event.currentTarget) return false;
@@ -89,7 +96,9 @@ export function Dialog({
           {description}
         </p>
       )}
-      <div className="dialog__body">{children}</div>
+      <div className="dialog__body">
+        <PopupContainer value={ref}>{children}</PopupContainer>
+      </div>
     </motion.dialog>,
     document.body,
   );

@@ -4,6 +4,7 @@ import { Avatar } from "../../ui/Avatar";
 import { Dialog } from "../../ui/Dialog";
 import { ProviderBadge } from "../../ui/ProviderBadge";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { GroupDetails } from "../groups/GroupDetails";
 
 export function ConversationDetails({
   conversation,
@@ -27,29 +28,32 @@ export function ConversationDetails({
       }
       onClose={onClose}
     >
-      <div className="contact-details">
-        <Avatar
-          name={conversation.display_name}
-          url={conversation.avatar_url}
-          size="large"
-        />
-        <h3>{conversation.display_name}</h3>
-        {phone && <p>{phone}</p>}
-        {conversation.description && (
-          <p className="contact-details__description">
-            {conversation.description}
-          </p>
-        )}
-      </div>
-      <dl className="details-list">
-        <div>
-          <dt>{t(($) => $.thread.conversation)}</dt>
-          <dd>
-            {conversation.kind === "group"
-              ? t(($) => $.thread.group)
-              : t(($) => $.details.direct)}
-          </dd>
+      {conversation.kind === "group" &&
+      account.capabilities?.includes("manage_groups") ? (
+        <GroupDetails account={account} conversation={conversation} />
+      ) : (
+        <div className="contact-details">
+          <Avatar
+            name={conversation.display_name}
+            url={conversation.avatar_url}
+            size="large"
+          />
+          <h3>{conversation.display_name}</h3>
+          {phone && <p>{phone}</p>}
+          {conversation.description && (
+            <p className="contact-details__description">
+              {conversation.description}
+            </p>
+          )}
         </div>
+      )}
+      <dl className="details-list">
+        {conversation.kind !== "group" && (
+          <div>
+            <dt>{t(($) => $.thread.conversation)}</dt>
+            <dd>{t(($) => $.details.direct)}</dd>
+          </div>
+        )}
         <div>
           <dt>{t(($) => $.details.account)}</dt>
           <dd>{account.label}</dd>

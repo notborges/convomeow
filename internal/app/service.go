@@ -548,7 +548,13 @@ func (s *Service) SendTextReply(ctx context.Context, conversationID, text, key, 
 }
 
 func (s *Service) Message(ctx context.Context, id string) (core.Message, error) {
-	return s.repo.GetMessage(ctx, id)
+	message, err := s.repo.GetMessage(ctx, id)
+	if err != nil {
+		return core.Message{}, err
+	}
+	messages := []core.Message{message}
+	s.withSenderNames(ctx, messages)
+	return messages[0], nil
 }
 
 func (s *Service) ListMessages(ctx context.Context, accountID string, before *core.PageCursor, limit int) ([]core.Message, error) {
@@ -558,7 +564,12 @@ func (s *Service) ListMessages(ctx context.Context, accountID string, before *co
 	if err := validatePage(limit); err != nil {
 		return nil, err
 	}
-	return s.repo.ListMessages(ctx, accountID, before, limit)
+	messages, err := s.repo.ListMessages(ctx, accountID, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	s.withSenderNames(ctx, messages)
+	return messages, nil
 }
 
 func (s *Service) ListConversationMessages(ctx context.Context, conversationID string, before *core.PageCursor, limit int) ([]core.Message, error) {
@@ -568,7 +579,12 @@ func (s *Service) ListConversationMessages(ctx context.Context, conversationID s
 	if err := validatePage(limit); err != nil {
 		return nil, err
 	}
-	return s.repo.ListConversationMessages(ctx, conversationID, before, limit)
+	messages, err := s.repo.ListConversationMessages(ctx, conversationID, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	s.withSenderNames(ctx, messages)
+	return messages, nil
 }
 
 func validatePage(limit int) error {

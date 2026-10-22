@@ -208,6 +208,9 @@ func (s *Service) deliverNotification(job browsernotify.Job) {
 		AccountLabel: truncateNotification(account.Label, 64), ConversationName: truncateNotification(conversation.DisplayName, 100), Kind: message.Kind, Locale: sub.Locale}
 	if sub.Preview {
 		payload.Text = truncateNotification(message.Text, 160)
+		if conversation.Kind == "group" && message.SenderID != "" {
+			payload.SenderName = truncateNotification(s.participantNames(account.ID)(ctx, message.SenderID), 100)
+		}
 	} else {
 		payload.Kind = ""
 	}

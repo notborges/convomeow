@@ -77,6 +77,22 @@ Commands set the requested state and do not toggle it. There is no automatic ret
 
 Live events and imported history update the same stored reaction state. Removal timestamps prevent older history from restoring removed reactions. `conversations.changed` notifications invalidate message and participant queries. Existing local messages acquire old reactions only when the provider supplies those reactions again; adding this feature does not request a resync.
 
+## Groups
+
+Accounts with the `manage_groups` capability can create and manage groups. Each command needs a connected account and is checked by WhatsApp. ConvoMeow does not keep its own copy of participants or roles.
+
+Create a group with `POST /api/v1/accounts/{id}/groups` and `{"name":"Launch team","participants":["+15551234567"]}`. Participants can be phone numbers with a country code or contact `provider_id` values. The response includes the new `conversation_id`. WhatsApp can create the group but decline some people, for example when their privacy settings allow only invite links; those people appear in `failed_participants`.
+
+`GET /api/v1/conversations/{id}/group` reads the current name, description, settings, the connected account's `own_role`, and participants with their roles. `PATCH` the same route with any of `name`, `description`, `admins_only_send`, and `admins_only_edit`. An empty description removes it.
+
+Post `{"action":"add","participants":["+15551234567"]}` to `/api/v1/conversations/{id}/group/participants` to add people. Use `remove`, `promote`, or `demote` with participant IDs from the group response. The response has one result per participant; HTTP 200 can still contain rejected entries. `GET /group/invite-link` returns the invite link, and `POST` to the same route revokes it and creates a new one. `POST /group/leave` leaves the group and keeps the saved conversation.
+
+A `403` with code `not_group_participant` means the account has left or was removed. Other permission failures return `403 forbidden`. Group changes made elsewhere arrive as `conversations.changed` notifications.
+
+Incoming messages and reply previews include `sender_name` when ConvoMeow knows the sender's contact or push name. Names are read when a message is returned, so a contact rename applies to existing messages.
+
+Live WhatsApp checks still needed: creating a group, adding someone whose privacy settings require an invite, promoting and demoting admins, resetting the invite link, leaving a group, and sender names for members known only by a hidden ID.
+
 ## Capabilities and message changes
 
 Account `capabilities` describe the connection's implemented features. Missing capabilities mean unsupported. Message `actions` refine support for the saved message, including ownership, type, deletion and provider deadlines. Check these fields instead of inferring support from `provider`; command endpoints enforce the same restrictions. Support does not guarantee delivery, and disconnected accounts cannot send commands.

@@ -2,6 +2,7 @@ import {
   Chat01Icon,
   ChatAdd01Icon,
   SmartphoneIcon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -18,6 +19,7 @@ import { LiveAvatar } from "../../app/LiveAvatar";
 import i18n from "../../i18n";
 import { errorKey } from "../../i18n/errors";
 import { formatDate, kindLabel } from "../../i18n/format";
+import { ActionRow } from "../../ui/ActionRow";
 import { Button, IconButton } from "../../ui/Button";
 import { EmptyState } from "../../ui/EmptyState";
 import { SearchField, TextField } from "../../ui/Field";
@@ -25,6 +27,7 @@ import { Loading } from "../../ui/Loading";
 import { ProviderBadge } from "../../ui/ProviderBadge";
 import { SegmentedControl } from "../../ui/SegmentedControl";
 import { StatusBadge } from "../../ui/StatusBadge";
+import { CreateGroupDialog } from "../groups/CreateGroupDialog";
 
 import { ChatPresenceIndicator } from "../presence/PresenceIndicator";
 
@@ -74,6 +77,7 @@ export function ChatSidebar({
   const [search, setSearch] = useState("");
   const [phone, setPhone] = useState("");
   const [showPhone, setShowPhone] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
   const queryClient = useQueryClient();
   const conversations = useInfiniteQuery({
     queryKey: keys.conversations(account.id),
@@ -257,20 +261,25 @@ export function ChatSidebar({
         </div>
       ) : (
         <div className="sidebar-list">
-          <button
-            type="button"
-            className="new-number"
+          <ActionRow
+            icon={<HugeiconsIcon icon={SmartphoneIcon} size={20} />}
             disabled={
               account.state !== "connected" ||
               !account.capabilities?.includes("start_conversation")
             }
             onClick={() => setShowPhone((value) => !value)}
           >
-            <span className="new-number__icon">
-              <HugeiconsIcon icon={SmartphoneIcon} size={20} />
-            </span>
-            <span>{t(($) => $.chats.phoneAction)}</span>
-          </button>
+            {t(($) => $.chats.phoneAction)}
+          </ActionRow>
+          {account.capabilities?.includes("manage_groups") && (
+            <ActionRow
+              icon={<HugeiconsIcon icon={UserGroupIcon} size={20} />}
+              disabled={account.state !== "connected"}
+              onClick={() => setCreatingGroup(true)}
+            >
+              {t(($) => $.groups.create)}
+            </ActionRow>
+          )}
           {showPhone && (
             <form className="new-number-form" onSubmit={startPhone}>
               <TextField
@@ -392,6 +401,17 @@ export function ChatSidebar({
       </footer>
       {account.last_error && account.state !== "connected" && (
         <p className="sidebar-error">{t(($) => $.errors.connection)}</p>
+      )}
+      {creatingGroup && (
+        <CreateGroupDialog
+          account={account}
+          onClose={() => setCreatingGroup(false)}
+          onCreated={(id) => {
+            setCreatingGroup(false);
+            setTab("chats");
+            onOpen(id);
+          }}
+        />
       )}
     </aside>
   );

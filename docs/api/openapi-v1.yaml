@@ -356,6 +356,38 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/accounts/{id}/groups:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: createGroup
+      summary: Create a group and its conversation
+      description: >-
+        Requires the manage_groups capability and a connected account. The
+        connected account becomes the group owner. Participants the provider
+        rejects are listed in failed_participants; the group is still created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateGroup'}
+            example:
+              name: Launch team
+              participants: ['+15551234567', '15557654321@s.whatsapp.net']
+      responses:
+        '201':
+          description: Group created.
+          headers:
+            Location:
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+        '422': {description: Connection does not support group management.}
   /api/v1/accounts/{id}/contacts:
     parameters:
       - $ref: '#/components/parameters/AccountID'
@@ -561,6 +593,117 @@ paths:
           description: Saved media is unavailable or staging is busy.
         '507':
           description: Media storage limit reached.
+  /api/v1/conversations/{id}/group:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getGroup
+      summary: Read group details and participants from the provider
+      description: Requires a connected account. Participant names come from synced contacts and push names.
+      responses:
+        '200':
+          description: Current group details.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '400': {description: Conversation is not a group.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+        '422': {description: Connection does not support group management.}
+    patch:
+      operationId: updateGroup
+      summary: Change the group name, description, or admin-only settings
+      description: Omitted fields stay unchanged. An empty description removes it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateGroup'}
+            example: {name: Launch team, admins_only_send: true}
+      responses:
+        '200':
+          description: Updated group details.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Group'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account lacks permission (code forbidden) or is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+        '422': {description: Connection does not support group management.}
+  /api/v1/conversations/{id}/group/participants:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    post:
+      operationId: changeGroupParticipants
+      summary: Add, remove, promote, or demote participants
+      description: >-
+        Returns one result per participant. HTTP 200 can include rejected
+        participants; check each status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeGroupParticipants'}
+            example: {action: add, participants: ['+15551234567']}
+      responses:
+        '200':
+          description: Per-participant results.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupParticipantResultPage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account lacks permission (code forbidden) or is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+        '422': {description: Connection does not support group management.}
+  /api/v1/conversations/{id}/group/invite-link:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    get:
+      operationId: getGroupInviteLink
+      summary: Read the group's invite link
+      description: WhatsApp allows only admins to read the link.
+      responses:
+        '200':
+          description: Invite link.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupInviteLink'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account lacks permission (code forbidden) or is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+    post:
+      operationId: resetGroupInviteLink
+      summary: Revoke the current invite link and create a new one
+      responses:
+        '200':
+          description: New invite link.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupInviteLink'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account lacks permission (code forbidden) or is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
+  /api/v1/conversations/{id}/group/leave:
+    parameters:
+      - $ref: '#/components/parameters/ConversationID'
+    post:
+      operationId: leaveGroup
+      summary: Leave the group
+      description: The conversation and its saved messages remain available.
+      responses:
+        '204': {description: Left the group.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {description: 'Account is not a participant (code not_group_participant).'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {description: Account is disconnected.}
   /api/v1/conversations/{id}/history-requests:
     parameters:
       - $ref: '#/components/parameters/ConversationID'
@@ -1536,6 +1679,9 @@ components:
           description: Saved original message ID, omitted when the original is not available locally.
         sender_id:
           type: string
+        sender_name:
+          type: string
+          description: Contact or push name for sender_id, when known.
         kind:
           type: string
           description: Quoted message type, or unknown for unsupported content.
@@ -1647,6 +1793,9 @@ components:
             sent, failed, or outcome_unknown.
         sender_id:
           type: string
+        sender_name:
+          type: string
+          description: Contact or push name for incoming messages, when known.
         kind:
           type: string
         content:
@@ -1706,6 +1855,90 @@ components:
           type: string
           enum: [remote, ready, unavailable]
           description: Remote media can be requested; ready media is stored; unavailable media cannot be recovered.
+    CreateGroup:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        participants:
+          type: array
+          maxItems: 256
+          items: {type: string, description: Phone number with country code or a contact provider_id.}
+    UpdateGroup:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        description: {type: string, maxLength: 2048}
+        admins_only_send: {type: boolean, description: Only admins can send messages.}
+        admins_only_edit: {type: boolean, description: Only admins can change the name, description, and photo.}
+    ChangeGroupParticipants:
+      type: object
+      required: [action, participants]
+      additionalProperties: false
+      properties:
+        action: {type: string, enum: [add, remove, promote, demote]}
+        participants:
+          type: array
+          minItems: 1
+          maxItems: 256
+          items: {type: string, description: Phone number with country code or a provider_id.}
+    Group:
+      type: object
+      required: [conversation_id, provider_chat_id, name, admins_only_send, admins_only_edit, own_role, participants]
+      properties:
+        conversation_id: {type: string}
+        provider_chat_id: {type: string}
+        name: {type: string}
+        description: {type: string}
+        created_at: {type: string, format: date-time}
+        admins_only_send: {type: boolean}
+        admins_only_edit: {type: boolean}
+        own_role: {$ref: '#/components/schemas/GroupRole'}
+        participants:
+          type: array
+          description: The connected account first, then owners, admins, and members by name.
+          items: {$ref: '#/components/schemas/GroupParticipant'}
+        failed_participants:
+          type: array
+          description: Returned by group creation for participants the provider did not add.
+          items: {$ref: '#/components/schemas/GroupParticipantResult'}
+    GroupRole:
+      type: string
+      enum: [member, admin, owner]
+    GroupParticipant:
+      type: object
+      required: [provider_id, role, is_self]
+      properties:
+        provider_id: {type: string, description: Phone-number ID when known; otherwise a hidden user ID.}
+        display_name: {type: string}
+        phone: {type: string}
+        role: {$ref: '#/components/schemas/GroupRole'}
+        is_self: {type: boolean}
+    GroupParticipantResult:
+      type: object
+      required: [provider_id, status]
+      properties:
+        provider_id: {type: string}
+        display_name: {type: string}
+        status:
+          type: string
+          enum: [ok, forbidden, privacy_restricted, not_found, recently_left, already_participant, not_participant, rejected]
+          description: privacy_restricted means the person accepts only invite links.
+    GroupParticipantResultPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/GroupParticipantResult'}
+    GroupInviteLink:
+      type: object
+      required: [url]
+      properties:
+        url: {type: string, format: uri}
     MessagePage:
       type: object
       required: [items]

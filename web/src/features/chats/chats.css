@@ -115,35 +115,6 @@
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
-.new-number {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 0;
-  border-radius: var(--radius-bubble);
-  background: transparent;
-  color: var(--accent);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  text-align: left;
-}
-.new-number:hover {
-  background: var(--surface-subtle);
-}
-.new-number:disabled {
-  opacity: 0.5;
-}
-.new-number__icon {
-  display: grid;
-  width: 52px;
-  height: 52px;
-  flex: none;
-  place-items: center;
-  border-radius: var(--radius-pill);
-  background: var(--accent-subtle);
-}
 .new-number-form {
   display: grid;
   gap: var(--space-3);
@@ -258,6 +229,14 @@
 .message--grouped {
   margin-top: var(--space-1);
 }
+.message__avatar {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  width: 28px;
+  margin-inline-end: var(--space-2);
+}
+
 .message__bubble {
   position: relative;
   --bubble-surface: var(--surface);

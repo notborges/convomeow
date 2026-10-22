@@ -3,7 +3,7 @@ import { useState } from "react";
 interface AvatarProps {
   name: string;
   url?: string;
-  size?: "small" | "medium" | "large";
+  size?: "xsmall" | "small" | "medium" | "large";
   className?: string;
 }
 

@@ -54,6 +54,12 @@ type fakeConnector struct {
 	avatarStarted        chan<- struct{}
 	avatarFetches        atomic.Int64
 	offline              bool
+	groupMu              sync.Mutex
+	group                core.Group
+	groupErr             error
+	groupUpdates         []core.GroupUpdate
+	inviteResets         int
+	leftGroups           int
 	eventMu              sync.Mutex
 	event                func(core.Event)
 }

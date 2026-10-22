@@ -117,6 +117,56 @@
     "service": "Serviço",
     "connection": "Conexão"
   },
+  "groups": {
+    "create": "Novo grupo",
+    "createDescription": "Dê um nome ao grupo e escolha quem adicionar. Você pode adicionar mais pessoas depois.",
+    "createAction": "Criar grupo",
+    "created": "Grupo criado",
+    "createdPartial": "Não foi possível adicionar algumas pessoas. Compartilhe o link de convite nos detalhes do grupo para convidá-las.",
+    "open": "Abrir grupo",
+    "name": "Nome do grupo",
+    "description": "Descrição",
+    "selected_one": "{{count}} pessoa selecionada",
+    "selected_other": "{{count}} pessoas selecionadas",
+    "unselect": "Remover {{name}} da seleção",
+    "addNumber": "Adicionar número",
+    "connect": "Conecte esta conta para gerenciar o grupo.",
+    "loading": "Carregando grupo",
+    "loadError": "Não foi possível carregar os detalhes do grupo",
+    "notParticipant": "Esta conta não participa mais deste grupo.",
+    "edit": "Editar nome e descrição",
+    "save": "Salvar alterações",
+    "settings": "Configurações do grupo",
+    "add": "Adicionar pessoas",
+    "addAction": "Adicionar ao grupo",
+    "owner": "Criador",
+    "admin": "Admin",
+    "participantActions": "Ações para {{name}}",
+    "promote": "Tornar admin",
+    "demote": "Remover como admin",
+    "remove": "Remover do grupo",
+    "removeConfirm": "Remover {{name}} deste grupo?",
+    "leave": "Sair do grupo",
+    "leaveConfirm": "Sair de {{name}}? Esta conta deixará de receber as mensagens do grupo. Só um admin pode adicioná-la de volta.",
+    "inviteLink": "Convidar por link",
+    "resetLink": "Redefinir link",
+    "resetConfirm": "Redefinir o link de convite? O link atual deixará de funcionar.",
+    "status": {
+      "ok": "Concluído",
+      "forbidden": "Só admins podem fazer isso",
+      "privacy_restricted": "As configurações de privacidade exigem um link de convite",
+      "not_found": "Não está no WhatsApp",
+      "recently_left": "Saiu recentemente e ainda não pode ser adicionado",
+      "already_participant": "Já está no grupo",
+      "not_participant": "Não está no grupo",
+      "rejected": "O WhatsApp recusou esta alteração"
+    },
+    "summary_one": "Grupo · {{count}} participante",
+    "summary_other": "Grupo · {{count}} participantes",
+    "participantsTitle": "Participantes",
+    "adminsOnlySend": "Só admins podem enviar mensagens",
+    "adminsOnlyEdit": "Só admins podem editar os dados do grupo"
+  },
   "composer": {
     "audioCaption": "Arquivos de áudio não aceitam legenda. Envie o texto separadamente.",
     "sendFailed": "Não foi possível confirmar o envio. Tente novamente para conferir o status.",
@@ -197,7 +247,8 @@
     "invalidKey": "Chave de acesso inválida. Confira data/control.token no seu servidor.",
     "mediaTimeout": "O download está demorando. Tente novamente.",
     "mediaLoad": "Não foi possível exibir a imagem. Tente novamente.",
-    "mediaDownload": "Falha no download. Tente novamente."
+    "mediaDownload": "Falha no download. Tente novamente.",
+    "notParticipant": "Esta conta não participa mais deste grupo."
   },
   "kinds": {
     "text": "Texto",
@@ -375,6 +426,7 @@
       "enabled": "As notificações estão ativadas neste navegador.",
       "disabled": "As notificações estão desativadas neste navegador.",
       "error": "Não foi possível configurar as notificações. Tente novamente."
-    }
+    },
+    "groupMessage": "{{sender}}: {{message}}"
   }
 }

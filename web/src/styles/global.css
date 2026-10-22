@@ -2,6 +2,7 @@
 @import "../ui/components.css";
 @import "../features/accounts/accounts.css";
 @import "../features/chats/chats.css";
+@import "../features/groups/groups.css";
 @import "../features/auth/auth.css";
 
 * {

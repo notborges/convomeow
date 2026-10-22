@@ -50,6 +50,7 @@ type Payload struct {
 	MessageID        string           `json:"message_id"`
 	AccountLabel     string           `json:"account_label"`
 	ConversationName string           `json:"conversation_name"`
+	SenderName       string           `json:"sender_name,omitempty"`
 	Kind             core.MessageKind `json:"kind"`
 	Text             string           `json:"text,omitempty"`
 	Locale           string           `json:"locale"`

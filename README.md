@@ -14,6 +14,8 @@ A self-hosted client and API for WhatsApp, powered by [whatsmeow](https://github
 - Browse conversations and synced contacts, including profile photos.
 - Send text and files, reply to messages, and jump to quoted messages.
 - View images and play audio in the web client.
+- Create groups, rename them, manage participants and admins, share invite links, and leave groups.
+- See sender names in group chats.
 - See delivery and read receipts as they arrive, with recipient details for groups.
 - Receive live updates, including typing and recording indicators.
 - Get browser notifications for incoming messages, including with the tab closed.
@@ -52,6 +54,8 @@ The CLI talks to the same running server. In another terminal:
 ./convomeow chat list personal
 ./convomeow message send personal +15551234567 'Hello'
 ./convomeow message send-file --caption 'Photo' personal +15551234567 image ./photo.png
+./convomeow group create personal 'Launch team' +15551234567
+./convomeow group info CONVERSATION_ID
 ```
 
 Replace `personal` with your account label or ID. To pair from the terminal, run `./convomeow account add personal`, then `./convomeow account login personal`.

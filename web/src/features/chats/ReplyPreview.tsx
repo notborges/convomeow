@@ -16,6 +16,7 @@ export function ReplyPreview({
     <>
       <strong>
         {sender ||
+          reply.sender_name ||
           reply.sender_id?.split("@")[0] ||
           t(($) => $.reply.unknownSender)}
       </strong>

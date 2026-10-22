@@ -258,6 +258,11 @@
   height: 100%;
   object-fit: cover;
 }
+.avatar--xsmall {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
 .avatar--small {
   width: 42px;
   height: 42px;
@@ -749,4 +754,96 @@
   .action-menu__quick-item[data-highlighted] {
     transform: none;
   }
+}
+
+.action-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-bubble);
+  background: transparent;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--duration-fast);
+}
+.action-row--accent {
+  color: var(--accent);
+}
+.action-row--danger {
+  color: var(--danger);
+}
+.action-row:hover:not(:disabled) {
+  background: var(--surface-subtle);
+}
+.action-row:disabled {
+  opacity: 0.5;
+}
+.action-row__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-pill);
+}
+.action-row--accent .action-row__icon {
+  background: var(--accent-subtle);
+}
+.action-row--danger .action-row__icon {
+  background: var(--danger-subtle);
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+}
+.switch-row__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.switch-row__text label {
+  font-size: var(--text-sm);
+}
+.switch-row__text small {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.switch {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: background var(--duration-fast);
+}
+.switch[aria-checked="true"] {
+  background: var(--accent);
+}
+.switch:disabled {
+  opacity: 0.5;
+}
+.switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: translate var(--duration-fast);
+}
+.switch[aria-checked="true"] .switch__thumb {
+  translate: 18px 0;
 }

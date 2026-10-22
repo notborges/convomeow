@@ -34,6 +34,27 @@ describe("browser notifications", () => {
     close();
   });
 
+  test("prefixes group messages with the sender and rejects malformed senders", () => {
+    const base = {
+      version: 1,
+      account_id: "personal",
+      conversation_id: "team",
+      message_id: "message",
+      account_label: "Personal",
+      conversation_name: "Launch team",
+      kind: "text",
+      text: "Ready?",
+      locale: "en",
+    };
+    const payload = parseNotification({ ...base, sender_name: "Maya" });
+    if (!payload) throw new Error("Expected a valid notification payload");
+    expect(notificationContent(payload).options.body).toBe("Maya: Ready?");
+    expect(parseNotification({ ...base, sender_name: 7 })).toBeUndefined();
+    expect(
+      parseNotification({ ...base, sender_name: "x".repeat(257) }),
+    ).toBeUndefined();
+  });
+
   test("renders localized text and media alerts with safe destinations and stable tags", () => {
     const payload = parseNotification({
       version: 1,

@@ -8,7 +8,7 @@ import (
 )
 
 func (*Connector) Capabilities() []string {
-	return []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation", "replies", "reactions", "typing", "read_receipts", "message_receipts", "request_history", "edit_messages", "revoke_messages"}
+	return []string{"read_messages", "read_media", "read_contacts", "read_avatars", "send_text", "send_media", "start_conversation", "replies", "reactions", "typing", "read_receipts", "message_receipts", "request_history", "edit_messages", "revoke_messages", "manage_groups"}
 }
 
 func (*Connector) MessageActions(m core.Message, now time.Time) core.MessageActions {

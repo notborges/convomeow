@@ -11,11 +11,12 @@ import {
   SmileIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Message } from "../../api/types";
 import { ActionMenu } from "../../ui/ActionMenu";
 import { IconButton } from "../../ui/Button";
+import { PopupContainer } from "../../ui/Dialog";
 import { EmojiPicker } from "../../ui/EmojiPicker";
 import { useMessageActions } from "./useMessageActions";
 
@@ -39,6 +40,7 @@ export function MessageActions({
   busy: boolean;
 }) {
   const { t } = useTranslation();
+  const popupContainer = useContext(PopupContainer);
   const trigger = useRef<HTMLButtonElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
@@ -194,7 +196,7 @@ export function MessageActions({
         ]}
       />
       <Popover.Root open={pickerOpen} onOpenChange={setPickerOpen}>
-        <Popover.Portal>
+        <Popover.Portal container={popupContainer}>
           <Popover.Positioner
             anchor={trigger}
             side={message.direction === "outbound" ? "left" : "right"}

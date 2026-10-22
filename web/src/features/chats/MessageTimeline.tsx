@@ -35,8 +35,10 @@ type Props = {
   accountID: string;
   conversationID: string;
   showSender: boolean;
+  senderAvatars: boolean;
   replySender: (message: {
     sender_id?: string;
+    sender_name?: string;
     direction?: string;
   }) => string | undefined;
   onReply: (message: Message) => void;
@@ -150,7 +152,9 @@ function VirtualMessages({
   onJump,
   onJumpDone,
   onLatest,
+  accountID,
   showSender,
+  senderAvatars,
   replySender,
   onReply,
 }: Omit<Props, "ref"> & {
@@ -285,6 +289,9 @@ function VirtualMessages({
       items.map((message, index) => ({
         message,
         ...messageGrouping(message, items[index - 1]),
+        lastInRun:
+          index === items.length - 1 ||
+          !messageGrouping(items[index + 1], message).grouped,
       })),
     [items],
   );
@@ -345,7 +352,7 @@ function VirtualMessages({
             retry: () => void load("newer"),
           },
         }}
-        itemContent={(_, { message, showDay, grouped }) => (
+        itemContent={(_, { message, showDay, grouped, lastInRun }) => (
           <div
             ref={observeRow}
             data-message-id={message.id}
@@ -358,6 +365,18 @@ function VirtualMessages({
               message={message}
               grouped={grouped}
               showSender={showSender}
+              senderAvatar={
+                showSender
+                  ? {
+                      accountID,
+                      visible: lastInRun,
+                      url:
+                        senderAvatars && message.sender_id
+                          ? `/api/v1/accounts/${encodeURIComponent(accountID)}/contacts/${encodeURIComponent(message.sender_id)}/avatar`
+                          : undefined,
+                    }
+                  : undefined
+              }
               onReply={onReply}
               onJump={onJump}
               replySender={

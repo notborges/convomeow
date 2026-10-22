@@ -61,6 +61,7 @@ type Reply struct {
 	MessageID         string      `json:"message_id,omitempty"`
 	ProviderMessageID string      `json:"-"`
 	SenderID          string      `json:"sender_id,omitempty"`
+	SenderName        string      `json:"sender_name,omitempty"`
 	Kind              MessageKind `json:"kind"`
 	Text              string      `json:"text,omitempty"`
 }
@@ -106,6 +107,7 @@ type Message struct {
 	Direction         string            `json:"direction"`
 	State             string            `json:"state"`
 	SenderID          string            `json:"sender_id,omitempty"`
+	SenderName        string            `json:"sender_name,omitempty"`
 	Kind              MessageKind       `json:"kind"`
 	Text              string            `json:"text,omitempty"`
 	Content           json.RawMessage   `json:"content,omitempty"`

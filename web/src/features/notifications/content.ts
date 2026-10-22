@@ -22,6 +22,7 @@ export type NotificationPayload = {
   conversation_name: string;
   kind: string;
   text?: string;
+  sender_name?: string;
   locale: "en" | "pt-BR";
 };
 
@@ -45,6 +46,8 @@ export function parseNotification(
     ].every((item) => typeof item === "string" && item.length <= 256) ||
     (p.text !== undefined &&
       (typeof p.text !== "string" || p.text.length > 1000)) ||
+    (p.sender_name !== undefined &&
+      (typeof p.sender_name !== "string" || p.sender_name.length > 256)) ||
     !["en", "pt-BR"].includes(p.locale ?? "")
   )
     return;
@@ -66,16 +69,22 @@ export function notificationContent(payload?: NotificationPayload) {
   const path = payload
     ? `/app/accounts/${encodeURIComponent(payload.account_id)}/chats/${encodeURIComponent(payload.conversation_id)}`
     : "/app/";
+  const body =
+    payload?.text ||
+    (kind
+      ? t(($) => $.notifications.media[kind])
+      : t(($) => $.notifications.newMessage));
   return {
     title: payload
       ? `${payload.conversation_name || t(($) => $.notifications.sender)} · ${payload.account_label}`
       : "ConvoMeow",
     options: {
-      body:
-        payload?.text ||
-        (kind
-          ? t(($) => $.notifications.media[kind])
-          : t(($) => $.notifications.newMessage)),
+      body: payload?.sender_name
+        ? t(($) => $.notifications.groupMessage, {
+            sender: payload.sender_name,
+            message: body,
+          })
+        : body,
       icon: "/app/brand/convomeow.png",
       badge: "/app/brand/convomeow.png",
       tag: payload

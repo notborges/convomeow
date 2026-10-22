@@ -117,6 +117,56 @@
     "service": "Service",
     "connection": "Connection"
   },
+  "groups": {
+    "create": "New group",
+    "createDescription": "Name the group and choose who to add. You can add more people later.",
+    "createAction": "Create group",
+    "created": "Group created",
+    "createdPartial": "Some people could not be added. Share the invite link from the group details to invite them.",
+    "open": "Open group",
+    "name": "Group name",
+    "description": "Description",
+    "selected_one": "{{count}} person selected",
+    "selected_other": "{{count}} people selected",
+    "unselect": "Remove {{name}} from selection",
+    "addNumber": "Add number",
+    "connect": "Connect this account to manage the group.",
+    "loading": "Loading group",
+    "loadError": "Could not load group details",
+    "notParticipant": "This account is no longer a participant in this group.",
+    "edit": "Edit name and description",
+    "save": "Save changes",
+    "settings": "Group settings",
+    "add": "Add people",
+    "addAction": "Add to group",
+    "owner": "Owner",
+    "admin": "Admin",
+    "participantActions": "Actions for {{name}}",
+    "promote": "Make admin",
+    "demote": "Remove admin rights",
+    "remove": "Remove from group",
+    "removeConfirm": "Remove {{name}} from this group?",
+    "leave": "Leave group",
+    "leaveConfirm": "Leave {{name}}? This account will stop receiving its messages. Only an admin can add it back.",
+    "inviteLink": "Invite via link",
+    "resetLink": "Reset link",
+    "resetConfirm": "Reset the invite link? The current link will stop working.",
+    "status": {
+      "ok": "Done",
+      "forbidden": "Only admins can do this",
+      "privacy_restricted": "Their privacy settings require an invite link",
+      "not_found": "Not on WhatsApp",
+      "recently_left": "Left recently and cannot be added yet",
+      "already_participant": "Already in the group",
+      "not_participant": "Not in the group",
+      "rejected": "WhatsApp rejected this change"
+    },
+    "summary_one": "Group · {{count}} participant",
+    "summary_other": "Group · {{count}} participants",
+    "participantsTitle": "Participants",
+    "adminsOnlySend": "Only admins can send messages",
+    "adminsOnlyEdit": "Only admins can edit group info"
+  },
   "composer": {
     "audioCaption": "Audio files cannot include a caption. Send the text separately.",
     "sendFailed": "Could not confirm the send. Try again to check its status.",
@@ -197,7 +247,8 @@
     "invalidKey": "Invalid access key. Check data/control.token on your server.",
     "mediaTimeout": "This download is taking too long. Try again.",
     "mediaLoad": "Could not display this image. Try again.",
-    "mediaDownload": "Download failed. Try again."
+    "mediaDownload": "Download failed. Try again.",
+    "notParticipant": "This account is no longer a participant in this group."
   },
   "kinds": {
     "text": "Text",
@@ -375,6 +426,7 @@
       "enabled": "Notifications are on for this browser.",
       "disabled": "Notifications are off for this browser.",
       "error": "Could not set up notifications. Try again."
-    }
+    },
+    "groupMessage": "{{sender}}: {{message}}"
   }
 }

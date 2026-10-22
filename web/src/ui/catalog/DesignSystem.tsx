@@ -1,7 +1,9 @@
 import {
   Add01Icon,
   Chat01Icon,
+  Logout01Icon,
   SendHorizontalIcon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
@@ -9,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import type { Message } from "../../api/types";
 import { MessageBubble } from "../../features/chats/MessageBubble";
 import { PresenceIndicator } from "../../features/presence/PresenceIndicator";
+import { ActionRow } from "../ActionRow";
 import { AudioPlayer } from "../AudioPlayer";
 import { Avatar } from "../Avatar";
 import { BrandMark } from "../BrandMark";
@@ -22,6 +25,7 @@ import { Loading } from "../Loading";
 import { ProviderBadge } from "../ProviderBadge";
 import { SegmentedControl } from "../SegmentedControl";
 import { StatusBadge } from "../StatusBadge";
+import { Switch } from "../Switch";
 import { ThemeToggle } from "../ThemeToggle";
 import "./catalog.css";
 
@@ -51,6 +55,7 @@ export default function DesignSystem() {
   const [tab, setTab] = useState("chats");
   const [dialog, setDialog] = useState(false);
   const [viewer, setViewer] = useState(false);
+  const [adminsOnly, setAdminsOnly] = useState(true);
   return (
     <main className="catalog">
       <header className="catalog__header">
@@ -148,6 +153,17 @@ export default function DesignSystem() {
             {t(($) => $.catalog.openDialog)}
           </Button>
         </div>
+        <div className="catalog__fields">
+          <ActionRow icon={<HugeiconsIcon icon={UserGroupIcon} size={20} />}>
+            {t(($) => $.groups.create)}
+          </ActionRow>
+          <ActionRow
+            tone="danger"
+            icon={<HugeiconsIcon icon={Logout01Icon} size={20} />}
+          >
+            {t(($) => $.groups.leave)}
+          </ActionRow>
+        </div>
         <p>{t(($) => $.catalog.actionsDescription)}</p>
       </section>
       <section>
@@ -178,6 +194,17 @@ export default function DesignSystem() {
             ]}
             onChange={setTab}
           />
+          <Switch
+            label={t(($) => $.groups.adminsOnlySend)}
+            checked={adminsOnly}
+            onChange={setAdminsOnly}
+          />
+          <Switch
+            label={t(($) => $.groups.adminsOnlyEdit)}
+            checked={false}
+            disabled
+            onChange={() => {}}
+          />
         </div>
       </section>
       <section>
@@ -204,6 +231,13 @@ export default function DesignSystem() {
           ].map((name) => (
             <Avatar key={name} name={name} />
           ))}
+        </div>
+        <div className="catalog__row">
+          {(["xsmall", "small", "medium", "large"] as const).map((size) => (
+            <Avatar key={size} name="Maya Chen" size={size} />
+          ))}
+        </div>
+        <div className="catalog__row">
           <StatusBadge state="connected" />
           <StatusBadge state="pairing" />
           <StatusBadge state="disconnected" />
@@ -213,6 +247,25 @@ export default function DesignSystem() {
         <h2>{t(($) => $.chats.title)}</h2>
         {replySelected && <p role="status">{t(($) => $.reply.action)}</p>}
         <div className="catalog__messages">
+          {[false, true].map((last, index) => (
+            <MessageBubble
+              key={`group-${last}`}
+              message={{
+                ...sample,
+                id: `group-sender-${index}`,
+                sender_id: "maya",
+                sender_name: "Maya Chen",
+                content: {
+                  text: last
+                    ? t(($) => $.catalog.sampleCoffee)
+                    : t(($) => $.catalog.sampleHello),
+                },
+              }}
+              grouped={last}
+              showSender
+              senderAvatar={{ accountID: "preview", visible: last }}
+            />
+          ))}
           <MessageBubble
             message={{
               ...sample,

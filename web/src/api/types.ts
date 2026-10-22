@@ -40,6 +40,7 @@ export interface Reply {
   deleted?: boolean;
   message_id?: string;
   sender_id?: string;
+  sender_name?: string;
   kind: string;
   text?: string;
 }
@@ -98,6 +99,7 @@ export interface Message {
   direction: "inbound" | "outbound";
   state: string;
   sender_id?: string;
+  sender_name?: string;
   kind: string;
   content: { text?: string; caption?: string };
   attachments?: Attachment[];
@@ -134,4 +136,50 @@ export interface MessageRevision {
   kind: "original" | "edit" | "revoke";
   text?: string;
   at: string;
+}
+
+export type GroupRole = "member" | "admin" | "owner";
+
+export interface GroupParticipant {
+  provider_id: string;
+  display_name?: string;
+  phone?: string;
+  role: GroupRole;
+  is_self: boolean;
+}
+
+export interface GroupParticipantResult {
+  provider_id: string;
+  display_name?: string;
+  status:
+    | "ok"
+    | "forbidden"
+    | "privacy_restricted"
+    | "not_found"
+    | "recently_left"
+    | "already_participant"
+    | "not_participant"
+    | "rejected";
+}
+
+export interface Group {
+  conversation_id: string;
+  provider_chat_id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
+  admins_only_send: boolean;
+  admins_only_edit: boolean;
+  own_role: GroupRole;
+  participants: GroupParticipant[];
+  failed_participants?: GroupParticipantResult[];
+}
+
+export type GroupParticipantAction = "add" | "remove" | "promote" | "demote";
+
+export interface GroupUpdate {
+  name?: string;
+  description?: string;
+  admins_only_send?: boolean;
+  admins_only_edit?: boolean;
 }

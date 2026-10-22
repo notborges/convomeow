@@ -3,6 +3,10 @@ import type {
   Attachment,
   Contact,
   Conversation,
+  Group,
+  GroupParticipantAction,
+  GroupParticipantResult,
+  GroupUpdate,
   LoginAttempt,
   Message,
   MessageReaction,
@@ -147,6 +151,39 @@ export const api = {
         method: "POST",
         ...json({ target: { type, value } }),
       },
+    ),
+  createGroup: (accountID: string, name: string, participants: string[]) =>
+    request<Group>(`/api/v1/accounts/${encodeURIComponent(accountID)}/groups`, {
+      method: "POST",
+      ...json({ name, participants }),
+    }),
+  group: (conversationID: string) =>
+    request<Group>(
+      `/api/v1/conversations/${encodeURIComponent(conversationID)}/group`,
+    ),
+  updateGroup: (conversationID: string, update: GroupUpdate) =>
+    request<Group>(
+      `/api/v1/conversations/${encodeURIComponent(conversationID)}/group`,
+      { method: "PATCH", ...json(update) },
+    ),
+  changeGroupParticipants: (
+    conversationID: string,
+    action: GroupParticipantAction,
+    participants: string[],
+  ) =>
+    request<Page<GroupParticipantResult>>(
+      `/api/v1/conversations/${encodeURIComponent(conversationID)}/group/participants`,
+      { method: "POST", ...json({ action, participants }) },
+    ),
+  groupInviteLink: (conversationID: string, reset = false) =>
+    request<{ url: string }>(
+      `/api/v1/conversations/${encodeURIComponent(conversationID)}/group/invite-link`,
+      { method: reset ? "POST" : "GET" },
+    ),
+  leaveGroup: (conversationID: string) =>
+    request<void>(
+      `/api/v1/conversations/${encodeURIComponent(conversationID)}/group/leave`,
+      { method: "POST" },
     ),
   messages: (
     conversationID: string,

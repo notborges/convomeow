@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiError } from "../../api/client";
 import type { Message } from "../../api/types";
+import { LiveAvatar } from "../../app/LiveAvatar";
 import { errorKey } from "../../i18n/errors";
 import { formatDate, kindLabel } from "../../i18n/format";
 import { Button } from "../../ui/Button";
@@ -32,9 +33,11 @@ export function MessageBubble({
   onJump,
   replySender,
   onReact,
+  senderAvatar,
 }: {
   message: Message;
   showSender: boolean;
+  senderAvatar?: { accountID: string; url?: string; visible: boolean };
   grouped: boolean;
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
@@ -58,12 +61,26 @@ export function MessageBubble({
 
   const outgoing = message.direction === "outbound";
   const content = message.content?.text || message.content?.caption;
+  const senderName =
+    message.sender_name || message.sender_id?.split("@")[0] || "";
   return (
     <article
       id={`message-${message.id}`}
       tabIndex={-1}
       className={`message ${message.reply ? "message--reply" : ""} ${message.deleted_at ? "message--deleted" : ""} ${message.attachments?.length ? "message--media" : ""} ${outgoing ? "message--outgoing" : ""} ${grouped ? "message--grouped" : ""}`}
     >
+      {senderAvatar && !outgoing && (
+        <span className="message__avatar" aria-hidden="true">
+          {senderAvatar.visible && (
+            <LiveAvatar
+              accountID={senderAvatar.accountID}
+              name={senderName}
+              url={senderAvatar.url}
+              size="xsmall"
+            />
+          )}
+        </span>
+      )}
       <div
         className="message__bubble"
         style={
@@ -88,10 +105,8 @@ export function MessageBubble({
               onChange={setChange}
             />
           )}
-        {showSender && message.sender_id && !outgoing && (
-          <span className="message__sender">
-            {message.sender_id.split("@")[0]}
-          </span>
+        {showSender && senderName && !outgoing && !grouped && (
+          <span className="message__sender">{senderName}</span>
         )}
         {message.reply && (
           <ReplyPreview

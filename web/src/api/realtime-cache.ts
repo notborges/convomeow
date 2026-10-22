@@ -38,9 +38,16 @@ export function affected(query: Query, change: Change): boolean {
   )
     return true;
   if (resource === "conversations") return id === change.account_id;
-  if (resource === "messages" && change.type === "contacts.changed")
+  if (
+    (resource === "messages" || resource === "group") &&
+    change.type === "contacts.changed"
+  )
     return false;
-  if (resource === "conversation" || resource === "messages")
+  if (
+    resource === "conversation" ||
+    resource === "messages" ||
+    resource === "group"
+  )
     return change.conversation_id
       ? id === change.conversation_id
       : query.meta?.accountID === change.account_id;

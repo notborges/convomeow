@@ -39,7 +39,11 @@ export function ChatThread({
     meta: { accountID: account.id },
     queryFn: () => api.conversation(conversationID),
   });
-  function replySender(message: { sender_id?: string; direction?: string }) {
+  function replySender(message: {
+    sender_id?: string;
+    sender_name?: string;
+    direction?: string;
+  }) {
     if (
       message.direction === "outbound" ||
       message.sender_id === account.provider_identity
@@ -47,7 +51,7 @@ export function ChatThread({
       return t(($) => $.reply.you);
     if (conversation.data?.kind === "direct")
       return conversation.data.display_name;
-    return message.sender_id?.split("@")[0];
+    return message.sender_name || message.sender_id?.split("@")[0];
   }
 
   return (
@@ -131,6 +135,7 @@ export function ChatThread({
         accountID={account.id}
         conversationID={conversationID}
         showSender={conversation.data?.kind === "group"}
+        senderAvatars={!!account.capabilities?.includes("read_avatars")}
         replySender={replySender}
         onReply={(message) => setReply({ ...message })}
       />

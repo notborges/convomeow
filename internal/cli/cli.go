@@ -142,6 +142,8 @@ func (c *Client) Run(ctx context.Context, args []string) error {
 		return c.chat(ctx, args[1:])
 	case "contact":
 		return c.contact(ctx, args[1:])
+	case "group":
+		return c.group(ctx, args[1:])
 	case "message":
 		return c.message(ctx, args[1:])
 	default:
@@ -447,5 +449,5 @@ func renderQR(w io.Writer, data string) error {
 }
 
 func usage() error {
-	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | contact list ACCOUNT [QUERY] | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message send-file [--key KEY] [--caption TEXT] [--upload-id ID] ACCOUNT PHONE_OR_CONVERSATION_ID KIND [FILE] | message list ACCOUNT")
+	return errors.New("usage: convomeow [--data-dir DIR] serve | account add NAME | account list | account login NAME | contact list ACCOUNT [QUERY] | chat list ACCOUNT | chat messages ACCOUNT CONVERSATION_ID | group create ACCOUNT NAME [PARTICIPANT...] | group info|leave CONVERSATION_ID | group rename|describe CONVERSATION_ID TEXT | group add|remove|promote|demote CONVERSATION_ID PARTICIPANT... | group admins-only CONVERSATION_ID send|edit on|off | group invite-link CONVERSATION_ID [--reset] | message send [--key KEY] ACCOUNT PHONE_OR_CONVERSATION_ID TEXT | message send-file [--key KEY] [--caption TEXT] [--upload-id ID] ACCOUNT PHONE_OR_CONVERSATION_ID KIND [FILE] | message list ACCOUNT")
 }

@@ -106,4 +106,30 @@ describe("realtime cache", () => {
     );
     client.clear();
   });
+
+  test("group details follow their conversation but not contact renames", () => {
+    const client = new QueryClient();
+    const query = client.getQueryCache().build(client, {
+      queryKey: ["group", "team"],
+      meta: { accountID: "a" },
+    });
+    expect(
+      affected(query, {
+        type: "conversations.changed",
+        account_id: "a",
+        conversation_id: "team",
+      }),
+    ).toBe(true);
+    expect(
+      affected(query, {
+        type: "conversations.changed",
+        account_id: "a",
+        conversation_id: "other",
+      }),
+    ).toBe(false);
+    expect(affected(query, { type: "contacts.changed", account_id: "a" })).toBe(
+      false,
+    );
+    client.clear();
+  });
 });

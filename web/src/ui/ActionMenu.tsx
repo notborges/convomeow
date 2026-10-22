@@ -1,8 +1,9 @@
 import { Menu } from "@base-ui/react/menu";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type ReactNode, type Ref, useRef } from "react";
+import { type ReactNode, type Ref, useContext, useRef } from "react";
 import { IconButton } from "./Button";
+import { PopupContainer } from "./Dialog";
 
 type Action = {
   id: string;
@@ -37,6 +38,7 @@ export function ActionMenu({
   triggerRef?: Ref<HTMLButtonElement>;
 }) {
   const restoreFocus = useRef(true);
+  const container = useContext(PopupContainer);
   if (actions.length === 0) return null;
   return (
     <Menu.Root
@@ -55,7 +57,7 @@ export function ActionMenu({
       >
         {triggerIcon ?? <HugeiconsIcon icon={MoreHorizontalIcon} size={18} />}
       </Menu.Trigger>
-      <Menu.Portal>
+      <Menu.Portal container={container}>
         <Menu.Positioner
           className="action-menu-positioner"
           positionMethod="fixed"
